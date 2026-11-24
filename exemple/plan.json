@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "livre": {
+    "titre": "Katastrophê",
+    "pagesTotal": 20,
+    "motsParPage": 350,
+    "premierePage": "droite"
+  },
+  "parties": [
+    {
+      "id": "presentation",
+      "titre": "Présentation",
+      "numerotee": true
+    },
+    {
+      "id": "regles",
+      "titre": "Les règles",
+      "numerotee": true
+    },
+    {
+      "id": "lexique",
+      "titre": "Lexique",
+      "numerotee": false
+    }
+  ],
+  "sections": [
+    {
+      "id": "t9e2rk",
+      "type": "hors-texte",
+      "titre": "Page de titre",
+      "partie": "presentation",
+      "statut": "definitif",
+      "pages": 1,
+      "debut": "droite",
+      "resume": "Titre, sous-titre et crédits."
+    },
+    {
+      "id": "v4n8hs",
+      "type": "texte",
+      "titre": "Avant-propos",
+      "fichier": "sections/avant-propos.md",
+      "partie": "presentation",
+      "statut": "relu",
+      "pages": 1,
+      "debut": "indifferent",
+      "resume": "Pourquoi ce jeu, et à qui il s’adresse.",
+      "motsParPage": null
+    },
+    {
+      "id": "c3w7mj",
+      "type": "texte",
+      "titre": "Qu’est-ce que Katastrophê ?",
+      "fichier": "sections/qu-est-ce-que-katastrophe.md",
+      "partie": "presentation",
+      "statut": "premier-jet",
+      "pages": 2,
+      "debut": "indifferent",
+      "resume": "Le principe du jeu, le matériel, les trois actes d’une partie.",
+      "motsParPage": null
+    },
+    {
+      "id": "s8q1lz",
+      "type": "texte",
+      "titre": "Créer son personnage",
+      "fichier": "sections/creer-son-personnage.md",
+      "partie": "regles",
+      "statut": "relu",
+      "pages": 2,
+      "debut": "indifferent",
+      "resume": "Le nom, la faute, les trois liens et les caractéristiques.",
+      "motsParPage": null
+    },
+    {
+      "id": "k7f3qa",
+      "type": "texte",
+      "titre": "Le heurt",
+      "fichier": "sections/le-heurt.md",
+      "partie": "regles",
+      "statut": "premier-jet",
+      "pages": 2,
+      "debut": "indifferent",
+      "resume": "Le choc des volontés et les trois réponses possibles.",
+      "motsParPage": null
+    },
+    {
+      "id": "p2m9xd",
+      "type": "hors-texte",
+      "titre": "Illustration : la chute",
+      "partie": "regles",
+      "statut": "a-ecrire",
+      "pages": 1,
+      "debut": "droite",
+      "resume": "Collage pleine page, rouge et noir."
+    },
+    {
+      "id": "h5d6yb",
+      "type": "texte",
+      "titre": "Les serments",
+      "fichier": "sections/les-serments.md",
+      "partie": "regles",
+      "statut": "premier-jet",
+      "pages": 3,
+      "debut": "indifferent",
+      "resume": "Prêter, tenir et trahir un serment.",
+      "motsParPage": null
+    },
+    {
+      "id": "r2x9fe",
+      "type": "texte",
+      "titre": "La chute",
+      "fichier": "sections/la-chute.md",
+      "partie": "regles",
+      "statut": "premier-jet",
+      "pages": 2,
+      "debut": "gauche",
+      "resume": "Quand et comment un personnage tombe. Ouvre une double page.",
+      "motsParPage": null
+    },
+    {
+      "id": "m6u4og",
+      "type": "texte",
+      "titre": "Les conséquences",
+      "fichier": "sections/les-consequences.md",
+      "partie": "regles",
+      "statut": "a-ecrire",
+      "pages": 2,
+      "debut": "indifferent",
+      "resume": "Ce que la chute laisse derrière elle, pour la partie suivante.",
+      "motsParPage": 300
+    },
+    {
+      "id": "l7k3pw",
+      "type": "texte",
+      "titre": "Lexique",
+      "fichier": "sections/lexique.md",
+      "partie": "lexique",
+      "statut": "relu",
+      "pages": 2,
+      "debut": "indifferent",
+      "resume": "Les termes du jeu, par ordre alphabétique.",
+      "motsParPage": null
+    }
+  ],
+  "corbeille": []
+}
