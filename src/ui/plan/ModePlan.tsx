@@ -1,0 +1,390 @@
+import { useEffect, useMemo, useState } from 'react'
+import {
+  changerPages,
+  creerSection,
+  deplacer,
+  modifierReglages,
+  modifierSection,
+  nouvelId,
+  restaurerSection,
+  supprimerSection,
+} from '../../domaine/operations'
+import { paginer, type Pagination } from '../../domaine/pagination'
+import { LIBELLES_STATUT, STATUTS, type Plan } from '../../domaine/plan'
+import type { Atelier, EtatOuvert } from '../../etat/atelier'
+import { IconeAnnuler, IconeCorbeille, IconeReglages, IconeRetablir, IconeSynchro } from '../commun/icones'
+import { IndicateurSynchro } from '../commun/IndicateurSynchro'
+import { formaterNombre, motsParSection, type MotsSection } from './format'
+import { Grille } from './Grille'
+import { PanneauCorbeille } from './PanneauCorbeille'
+import { PanneauCreation } from './PanneauCreation'
+import { PanneauReglages } from './PanneauReglages'
+import { PanneauSection } from './PanneauSection'
+
+type Panneau =
+  | { type: 'section'; id: string }
+  | { type: 'creation'; index: number }
+  | { type: 'corbeille' }
+  | { type: 'reglages' }
+
+export type Zoom = 'compact' | 'normal' | 'detaille'
+const ZOOMS: { valeur: Zoom; libelle: string }[] = [
+  { valeur: 'compact', libelle: 'Compact' },
+  { valeur: 'normal', libelle: 'Normal' },
+  { valeur: 'detaille', libelle: 'Détaillé' },
+]
+const CLE_ZOOM = 'atelier.zoom'
+const DUREE_BANDEAU_MS = 10_000
+
+function lireZoom(): Zoom {
+  try {
+    const z = localStorage.getItem(CLE_ZOOM)
+    return z === 'compact' || z === 'detaille' ? z : 'normal'
+  } catch {
+    return 'normal'
+  }
+}
+
+function champDeSaisie(cible: EventTarget | null): boolean {
+  return (
+    cible instanceof HTMLElement &&
+    (cible.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(cible.tagName))
+  )
+}
+
+interface Proprietes {
+  atelier: Atelier
+  etat: EtatOuvert
+  plan: Plan
+}
+
+export function ModePlan({ atelier, etat, plan }: Proprietes) {
+  const textes = etat.manuscrit?.textes
+  const [panneau, setPanneau] = useState<Panneau | null>(null)
+  const [supprimee, setSupprimee] = useState<{ id: string; titre: string } | null>(null)
+  const [zoom, setZoom] = useState<Zoom>(lireZoom)
+
+  const mots = useMemo(() => motsParSection(plan, textes ?? new Map<string, string>()), [plan, textes])
+  const pagination = useMemo(() => paginer(plan.sections, plan.livre.premierePage), [plan.sections, plan.livre.premierePage])
+
+  // Le bandeau « Section supprimée. Annuler » reste 10 secondes.
+  useEffect(() => {
+    if (!supprimee) return
+    const minuterie = setTimeout(() => {
+      setSupprimee(null)
+    }, DUREE_BANDEAU_MS)
+    return () => {
+      clearTimeout(minuterie)
+    }
+  }, [supprimee])
+
+  // Cmd/Ctrl+Z et Cmd/Ctrl+Maj+Z, hors des champs de saisie et des panneaux.
+  useEffect(() => {
+    function surTouche(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return
+      if (champDeSaisie(e.target) || document.querySelector('dialog[open]')) return
+      e.preventDefault()
+      if (e.shiftKey) atelier.retablir()
+      else atelier.annuler()
+    }
+    document.addEventListener('keydown', surTouche)
+    return () => {
+      document.removeEventListener('keydown', surTouche)
+    }
+  }, [atelier])
+
+  const titre = (id: string) => plan.sections.find((s) => s.id === id)?.titre ?? ''
+
+  function choisirZoom(z: Zoom) {
+    setZoom(z)
+    try {
+      localStorage.setItem(CLE_ZOOM, z)
+    } catch {
+      // Préférence non mémorisée : sans conséquence.
+    }
+  }
+
+  const sectionOuverte = panneau?.type === 'section' ? plan.sections.find((s) => s.id === panneau.id) : undefined
+
+  return (
+    <div className="mode-plan" data-zoom={zoom}>
+      <header className="barre barre-plan">
+        <div className="barre-ligne">
+          <h1 className="barre-titre">{plan.livre.titre}</h1>
+          <IndicateurSynchro synchro={etat.synchro} enAttente={etat.enAttente} conflit={etat.conflit !== null} />
+        </div>
+        <BarreEtat plan={plan} pagination={pagination} mots={mots} />
+        <div className="barre-outils">
+          <button
+            type="button"
+            className="bouton-icone"
+            aria-label="Annuler la dernière opération"
+            title={etat.annulable ? `Annuler : ${etat.annulable}` : 'Rien à annuler'}
+            disabled={!etat.annulable}
+            onClick={() => {
+              atelier.annuler()
+            }}
+          >
+            <IconeAnnuler />
+          </button>
+          <button
+            type="button"
+            className="bouton-icone"
+            aria-label="Rétablir"
+            title={etat.retablissable ? `Rétablir : ${etat.retablissable}` : 'Rien à rétablir'}
+            disabled={!etat.retablissable}
+            onClick={() => {
+              atelier.retablir()
+            }}
+          >
+            <IconeRetablir />
+          </button>
+          <div className="zoom" role="group" aria-label="Zoom">
+            {ZOOMS.map((z) => (
+              <button
+                key={z.valeur}
+                type="button"
+                aria-pressed={zoom === z.valeur}
+                onClick={() => {
+                  choisirZoom(z.valeur)
+                }}
+              >
+                {z.libelle}
+              </button>
+            ))}
+          </div>
+          <span className="espace" />
+          <button
+            type="button"
+            className="bouton-icone"
+            aria-label="Synchroniser"
+            title="Synchroniser"
+            disabled={etat.synchro.etat === 'en-cours' || etat.synchro.etat === 'envoi'}
+            onClick={() => {
+              void atelier.synchroniser()
+            }}
+          >
+            <IconeSynchro />
+          </button>
+          <button
+            type="button"
+            className="bouton-icone avec-compteur"
+            aria-label={`Corbeille (${plan.corbeille.length})`}
+            title="Corbeille"
+            onClick={() => {
+              setPanneau({ type: 'corbeille' })
+            }}
+          >
+            <IconeCorbeille />
+            {plan.corbeille.length > 0 && <span className="compteur">{plan.corbeille.length}</span>}
+          </button>
+          <button
+            type="button"
+            className="bouton-icone"
+            aria-label="Réglages"
+            title="Réglages"
+            onClick={() => {
+              setPanneau({ type: 'reglages' })
+            }}
+          >
+            <IconeReglages />
+          </button>
+        </div>
+      </header>
+
+      {etat.conflit && (
+        <div className="bandeau bandeau-attention bandeau-actions" role="alert">
+          <p>
+            Le plan a été modifié sur un autre appareil pendant vos modifications ici. Choisissez la version à
+            garder ; l’autre reste consultable dans l’historique GitHub.
+          </p>
+          <div>
+            <button
+              type="button"
+              onClick={() => {
+                void atelier.resoudreConflit('local')
+              }}
+            >
+              Garder la mienne
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const ok = window.confirm(
+                  `Les ${etat.enAttente} modification(s) du plan faites sur cet appareil seront abandonnées. Continuer ?`,
+                )
+                if (ok) void atelier.resoudreConflit('distant')
+              }}
+            >
+              Prendre celle de GitHub
+            </button>
+          </div>
+        </div>
+      )}
+      {etat.synchro.etat === 'erreur' && (
+        <p className="bandeau bandeau-erreur" role="alert">
+          {etat.synchro.message}
+        </p>
+      )}
+
+      <main className="contenu-plan">
+        <Grille
+          plan={plan}
+          mots={mots}
+          ouvrir={(id) => {
+            // En attendant l'éditeur (jalon 3), ouvrir une section ouvre son panneau.
+            setPanneau({ type: 'section', id })
+          }}
+          modifier={(id) => {
+            setPanneau({ type: 'section', id })
+          }}
+          changerPages={(id, delta) => {
+            const s = plan.sections.find((x) => x.id === id)
+            if (!s) return
+            const n = Math.max(1, s.pages + delta)
+            atelier.modifierPlan((p) => changerPages(p, id, delta), `${s.titre} sur ${n} page${n > 1 ? 's' : ''}`)
+          }}
+          creer={(index) => {
+            setPanneau({ type: 'creation', index })
+          }}
+          deplacer={(id, index) => {
+            atelier.modifierPlan((p) => deplacer(p, id, index), `déplacement de ${titre(id)}`)
+          }}
+        />
+      </main>
+
+      {supprimee && (
+        <div className="bandeau-flottant" role="status">
+          <span>Section supprimée.</span>
+          <button
+            type="button"
+            onClick={() => {
+              atelier.modifierPlan((p) => restaurerSection(p, supprimee.id), `restauration de ${supprimee.titre}`)
+              setSupprimee(null)
+            }}
+          >
+            Annuler
+          </button>
+        </div>
+      )}
+
+      {panneau?.type === 'section' && sectionOuverte && (
+        <PanneauSection
+          key={sectionOuverte.id}
+          plan={plan}
+          section={sectionOuverte}
+          emplacement={pagination.emplacements.get(sectionOuverte.id)}
+          mots={mots.get(sectionOuverte.id)}
+          valider={(modif) => {
+            atelier.modifierPlan((p) => modifierSection(p, sectionOuverte.id, modif), `modification de ${sectionOuverte.titre}`)
+            setPanneau(null)
+          }}
+          supprimer={() => {
+            atelier.modifierPlan(
+              (p) => supprimerSection(p, sectionOuverte.id, new Date()),
+              `suppression de ${sectionOuverte.titre}`,
+            )
+            setSupprimee({ id: sectionOuverte.id, titre: sectionOuverte.titre })
+            setPanneau(null)
+          }}
+          fermer={() => {
+            setPanneau(null)
+          }}
+        />
+      )}
+      {panneau?.type === 'creation' && (
+        <PanneauCreation
+          plan={plan}
+          index={panneau.index}
+          creer={(nouvelle) => {
+            atelier.modifierPlan(
+              (p) => creerSection(p, nouvelle, panneau.index, nouvelId(p)),
+              `création de ${nouvelle.titre.trim()}`,
+            )
+            setPanneau(null)
+          }}
+          fermer={() => {
+            setPanneau(null)
+          }}
+        />
+      )}
+      {panneau?.type === 'corbeille' && (
+        <PanneauCorbeille
+          plan={plan}
+          restaurer={(id) => {
+            const s = plan.corbeille.find((e) => e.section.id === id)?.section
+            atelier.modifierPlan((p) => restaurerSection(p, id), `restauration de ${s?.titre ?? ''}`)
+          }}
+          vider={() => {
+            atelier.viderCorbeille()
+          }}
+          fermer={() => {
+            setPanneau(null)
+          }}
+        />
+      )}
+      {panneau?.type === 'reglages' && (
+        <PanneauReglages
+          plan={plan}
+          enAttente={etat.enAttente}
+          valider={(reglages) => {
+            atelier.modifierPlan((p) => modifierReglages(p, reglages), 'réglages du livre')
+            setPanneau(null)
+          }}
+          seDeconnecter={() => {
+            setPanneau(null)
+            void atelier.seDeconnecter()
+          }}
+          fermer={() => {
+            setPanneau(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function BarreEtat({
+  plan,
+  pagination,
+  mots,
+}: {
+  plan: Plan
+  pagination: Pagination
+  mots: ReadonlyMap<string, MotsSection>
+}) {
+  const { pagesTotal } = plan.livre
+  const depasse = pagination.totalPages > pagesTotal
+  let ecrits = 0
+  let cible = 0
+  for (const m of mots.values()) {
+    ecrits += m.ecrits
+    cible += m.cible
+  }
+  const parStatut = new Map(STATUTS.map((s) => [s, plan.sections.filter((x) => x.statut === s).length]))
+
+  return (
+    <div className="barre-etat">
+      <p className={depasse ? 'etat-depasse' : undefined}>
+        <span className="etiquette">Pages</span> {pagination.totalPages} / {pagesTotal}
+      </p>
+      <p>
+        <span className="etiquette">Mots</span> {formaterNombre(ecrits)} / {formaterNombre(cible)}
+      </p>
+      <p className="statuts">
+        {STATUTS.map((s) => (
+          <span key={s} className={`compte-statut statut-${s}`} title={LIBELLES_STATUT[s]}>
+            <span className="pastille" aria-hidden="true" />
+            <span className="lecteur-ecran">{LIBELLES_STATUT[s]} : </span>
+            {parStatut.get(s)}
+          </span>
+        ))}
+      </p>
+      {pagesTotal % 4 !== 0 && (
+        <p className="alerte-pages" title="Un livre imprimé compte en général un multiple de 4 pages.">
+          {pagesTotal} pages : pas un multiple de 4
+        </p>
+      )}
+    </div>
+  )
+}

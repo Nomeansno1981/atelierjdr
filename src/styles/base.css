@@ -181,28 +181,44 @@ input {
 .barre {
   position: sticky;
   top: 0;
-  z-index: 10;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
+  z-index: 20;
+  display: grid;
+  gap: 6px;
   padding: max(8px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 8px
     max(16px, env(safe-area-inset-left));
   background: var(--surface);
   border-bottom: 1px solid var(--bordure);
 }
 
+.barre-ligne {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
 .barre-titre {
   font-size: 1.15rem;
   margin-right: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.barre-actions {
+.barre-outils {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.espace {
+  flex: 1;
 }
 
 .indicateur {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -225,8 +241,19 @@ input {
   background: var(--statut-a-ecrire-trait);
 }
 
-.indicateur-erreur .indicateur-point {
+.indicateur-erreur .indicateur-point,
+.indicateur-conflit .indicateur-point {
   background: var(--erreur);
+}
+
+.indicateur-local .indicateur-point,
+.indicateur-envoi .indicateur-point {
+  background: var(--statut-premier-jet-trait);
+}
+
+.indicateur-conflit {
+  color: var(--erreur);
+  font-weight: 600;
 }
 
 .contenu {
@@ -239,113 +266,6 @@ input {
 .contenu > .bandeau,
 .atelier > .bandeau {
   margin: 16px;
-}
-
-/* --- Liste des sections ---------------------------------------------------- */
-
-.liste {
-  display: grid;
-  gap: 24px;
-}
-
-.liste-resume {
-  color: var(--texte-doux);
-  font-size: 0.875rem;
-}
-
-.partie-titre {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 8px;
-  font-size: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.partie-numero {
-  color: var(--accent);
-  font-size: 0.8rem;
-}
-
-.sections {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.ligne {
-  display: flex;
-  gap: 12px;
-  padding: 12px;
-  background: var(--surface);
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon);
-}
-
-.pastille {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  margin-top: 4px;
-  border-radius: 50%;
-  border: 2px solid var(--trait);
-  background: var(--remplissage);
-}
-
-.statut-a-ecrire {
-  --remplissage: var(--statut-a-ecrire);
-  --trait: var(--statut-a-ecrire-trait);
-}
-
-.statut-premier-jet {
-  --remplissage: var(--statut-premier-jet);
-  --trait: var(--statut-premier-jet-trait);
-}
-
-.statut-relu {
-  --remplissage: var(--statut-relu);
-  --trait: var(--statut-relu-trait);
-}
-
-.statut-definitif {
-  --remplissage: var(--statut-definitif);
-  --trait: var(--statut-definitif-trait);
-}
-
-.ligne-corps {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.ligne-titre {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-}
-
-.ligne-resume {
-  color: var(--texte-doux);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ligne-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 0.8rem;
-  color: var(--texte-doux);
-}
-
-.alerte {
-  color: var(--erreur);
-  font-weight: 600;
 }
 
 .icone {

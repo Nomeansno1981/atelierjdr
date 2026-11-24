@@ -1,0 +1,774 @@
+/* Atelier : mode plan (chemin de fer), panneaux et commandes communes. */
+
+:root {
+  --page: #ffffff;
+  --hachure: rgb(0 0 0 / 0.13);
+  --hachure-rouge: rgb(163 38 27 / 0.38);
+  --ombre: 0 1px 2px rgb(0 0 0 / 0.12), 0 2px 6px rgb(0 0 0 / 0.06);
+  --ombre-forte: 0 10px 28px rgb(0 0 0 / 0.25);
+  --bouton-postit: rgb(255 255 255 / 0.5);
+  --planche: 300px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #2a2724;
+    --hachure: rgb(255 255 255 / 0.12);
+    --hachure-rouge: rgb(240 138 124 / 0.4);
+    --ombre: 0 1px 2px rgb(0 0 0 / 0.5);
+    --ombre-forte: 0 10px 28px rgb(0 0 0 / 0.6);
+    --bouton-postit: rgb(0 0 0 / 0.28);
+  }
+}
+
+/* --- Statuts : la couleur leur appartient -------------------------------- */
+
+.statut-a-ecrire {
+  --remplissage: var(--statut-a-ecrire);
+  --trait: var(--statut-a-ecrire-trait);
+}
+
+.statut-premier-jet {
+  --remplissage: var(--statut-premier-jet);
+  --trait: var(--statut-premier-jet-trait);
+}
+
+.statut-relu {
+  --remplissage: var(--statut-relu);
+  --trait: var(--statut-relu-trait);
+}
+
+.statut-definitif {
+  --remplissage: var(--statut-definitif);
+  --trait: var(--statut-definitif-trait);
+}
+
+.pastille {
+  flex: none;
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--trait);
+  background: var(--remplissage);
+}
+
+/* --- Commandes communes ----------------------------------------------------- */
+
+.bouton-icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+.avec-compteur {
+  position: relative;
+}
+
+.compteur {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-texte);
+  font-size: 0.7rem;
+  line-height: 18px;
+}
+
+.bouton-danger {
+  color: var(--erreur);
+  border-color: var(--erreur);
+}
+
+.lecteur-ecran {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.zoom {
+  display: none;
+}
+
+.zoom button {
+  min-height: 36px;
+  border-radius: 0;
+  font-size: 0.85rem;
+}
+
+.zoom button:first-child {
+  border-radius: var(--rayon) 0 0 var(--rayon);
+}
+
+.zoom button:last-child {
+  border-radius: 0 var(--rayon) var(--rayon) 0;
+}
+
+.zoom button + button {
+  margin-left: -1px;
+}
+
+.zoom button[aria-pressed='true'] {
+  background: var(--texte);
+  color: var(--fond);
+  border-color: var(--texte);
+}
+
+/* --- Barre d'état ----------------------------------------------------------- */
+
+.barre-etat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.barre-etat .etiquette {
+  color: var(--texte-doux);
+}
+
+.etat-depasse {
+  color: var(--erreur);
+  font-weight: 700;
+}
+
+.statuts {
+  display: flex;
+  gap: 10px;
+}
+
+.compte-statut {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.alerte-pages {
+  color: var(--erreur);
+}
+
+/* --- Bandeaux ------------------------------------------------------------- */
+
+.mode-plan > .bandeau {
+  margin: 12px 16px 0;
+}
+
+.bandeau-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.bandeau-actions div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bandeau-flottant {
+  position: fixed;
+  z-index: 50;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 12px;
+  background: var(--texte);
+  color: var(--fond);
+  box-shadow: var(--ombre-forte);
+  white-space: nowrap;
+}
+
+.bandeau-flottant button {
+  background: transparent;
+  color: inherit;
+  border-color: currentColor;
+  font-weight: 600;
+}
+
+/* --- Grille ----------------------------------------------------------------- */
+
+.contenu-plan {
+  padding: 20px max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+}
+
+.planches {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px 28px;
+  align-items: start;
+}
+
+.planche {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1.5rem auto auto;
+  column-gap: 2px;
+}
+
+.separateur {
+  grid-row: 1;
+  align-self: end;
+  min-width: 0;
+  margin-bottom: 3px;
+  padding-left: 5px;
+  border-left: 3px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page {
+  grid-row: 2;
+  aspect-ratio: 7 / 10;
+  min-width: 0;
+  background: var(--page);
+  border: 1px solid var(--bordure);
+  border-radius: 2px;
+}
+
+.page-libre {
+  background: transparent;
+  border-style: dashed;
+}
+
+.page-blanche {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-image: repeating-linear-gradient(45deg, transparent 0 7px, var(--hachure) 7px 9px);
+  color: var(--texte-doux);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.page-depasse {
+  border-color: var(--erreur);
+  background-image: repeating-linear-gradient(-45deg, transparent 0 6px, var(--hachure-rouge) 6px 9px);
+}
+
+.numero {
+  grid-row: 3;
+  padding-top: 2px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--texte-doux);
+  font-variant-numeric: tabular-nums;
+}
+
+.numero-depasse {
+  color: var(--erreur);
+  font-weight: 700;
+}
+
+.ajout-fin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  align-self: center;
+  justify-self: start;
+  border-style: dashed;
+  color: var(--texte-doux);
+}
+
+/* --- Post-its ------------------------------------------------------------- */
+
+.postit {
+  position: relative;
+  z-index: 1;
+  grid-row: 2;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  margin: 4px;
+  border-radius: 4px;
+  background: var(--remplissage);
+  box-shadow: var(--ombre);
+  cursor: grab;
+  /* Appui long au doigt : ni sélection de texte, ni menu contextuel d'iOS. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+.postit-principal {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 7px 8px 38px;
+  overflow: hidden;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: inherit;
+}
+
+.postit-partie {
+  padding-right: 26px;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.postit-titre {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  padding-right: 22px;
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.postit-titre .icone {
+  display: inline;
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+.postit-resume {
+  font-size: 0.78rem;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jauge {
+  display: grid;
+  gap: 2px;
+  margin-top: auto;
+}
+
+.jauge-barre {
+  height: 5px;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.12);
+  overflow: hidden;
+}
+
+.jauge-remplie {
+  display: block;
+  height: 100%;
+  background: var(--trait);
+}
+
+.jauge-chiffres {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.jauge-depasse .jauge-remplie {
+  background: var(--erreur);
+}
+
+.jauge-depasse .jauge-chiffres {
+  color: var(--erreur);
+  font-weight: 700;
+}
+
+.postit-menu {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 28px;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.postit-pages {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.postit-pages .bouton-icone {
+  min-width: 28px;
+  min-height: 28px;
+  border-color: rgb(0 0 0 / 0.15);
+  background: var(--bouton-postit);
+  color: inherit;
+}
+
+.postit-inserer {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: -4px;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--texte-doux);
+  opacity: 0.6;
+}
+
+.postit:hover .postit-inserer,
+.postit-inserer:focus-visible {
+  opacity: 1;
+}
+
+.mention-suite {
+  margin-right: 5px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.1);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+.postit-suite .postit-principal {
+  padding-bottom: 8px;
+}
+
+.postit-suite {
+  opacity: 0.85;
+  cursor: default;
+}
+
+.postit-continue {
+  border-right: 3px dashed var(--trait);
+}
+
+/* Place provisoire pendant un déplacement. */
+.postit-place {
+  padding: 8px;
+  outline: 2px dashed var(--accent);
+  outline-offset: 1px;
+  opacity: 0.6;
+}
+
+.postit-place .postit-titre {
+  padding-right: 0;
+}
+
+/* Original d'un post-it glissé : même place, même taille, mais invisible. */
+.postit-cache {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.cadre-fantome {
+  width: 100%;
+  height: 100%;
+}
+
+.postit-fantome {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--remplissage);
+  box-shadow: var(--ombre-forte);
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.2;
+  opacity: 0.92;
+  transform: rotate(-2deg);
+  cursor: grabbing;
+}
+
+.en-glissement .postit-inserer,
+.en-glissement .postit-pages,
+.en-glissement .postit-menu {
+  visibility: hidden;
+}
+
+/* --- Tailles d'écran -------------------------------------------------------- */
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .planches {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .zoom {
+    display: inline-flex;
+  }
+
+  .planches {
+    grid-template-columns: repeat(auto-fill, var(--planche));
+  }
+
+  .mode-plan[data-zoom='compact'] {
+    --planche: 170px;
+  }
+
+  .mode-plan[data-zoom='normal'] {
+    --planche: 300px;
+  }
+
+  .mode-plan[data-zoom='detaille'] {
+    --planche: 440px;
+  }
+
+  .mode-plan[data-zoom='compact'] :is(.postit-partie, .postit-resume, .jauge-chiffres, .postit-pages, .postit-inserer) {
+    display: none;
+  }
+
+  .mode-plan[data-zoom='compact'] .postit-principal {
+    padding: 5px 5px 7px;
+  }
+
+  .mode-plan[data-zoom='compact'] .postit-titre {
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    padding-right: 16px;
+    font-size: 0.7rem;
+  }
+
+  .mode-plan[data-zoom='compact'] .postit-menu {
+    min-width: 20px;
+    min-height: 20px;
+  }
+
+  .mode-plan[data-zoom='detaille'] .postit-resume {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    white-space: normal;
+  }
+}
+
+/* Écrans tactiles : zones d'au moins 44 px. */
+@media (pointer: coarse) {
+  .bouton-icone,
+  .postit-menu,
+  .postit-pages .bouton-icone {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .postit-principal {
+    padding-bottom: 52px;
+  }
+
+  .postit-partie,
+  .postit-titre {
+    padding-right: 38px;
+  }
+
+  .postit-inserer {
+    width: 28px;
+    height: 28px;
+    opacity: 0.8;
+  }
+
+  /* Zone tactile élargie autour du petit bouton. */
+  .postit-inserer::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
+}
+
+/* --- Panneaux ----------------------------------------------------------------- */
+
+.dialogue {
+  width: min(34rem, calc(100vw - 24px));
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--texte);
+  box-shadow: var(--ombre-forte);
+}
+
+.dialogue::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.dialogue-contenu {
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 14px 20px 20px;
+}
+
+.dialogue-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.dialogue-entete h2 {
+  font-size: 1.1rem;
+}
+
+.dialogue-entete .bouton-icone {
+  border: 0;
+}
+
+.formulaire {
+  display: grid;
+  gap: 6px;
+}
+
+.formulaire label,
+.formulaire legend {
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+textarea,
+select {
+  width: 100%;
+  min-height: var(--cible-tactile);
+  padding: 8px 12px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.champs-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+
+.champs-2 > div {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+@media (max-width: 420px) {
+  .champs-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.choix-type,
+.parties {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choix-type label,
+.case {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 400;
+}
+
+.choix-type input,
+.case input {
+  width: auto;
+  min-height: 0;
+}
+
+.ligne-partie {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.actions-formulaire {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.zone-deconnexion {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bordure);
+}
+
+.liste-corbeille {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.liste-corbeille li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bordure);
+}
+
+.corbeille-titre {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}

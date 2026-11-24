@@ -2,11 +2,12 @@
  * Cache local dans IndexedDB : la connexion de l'appareil et une copie des
  * fichiers du manuscrit telle qu'au dernier commit synchronisé.
  *
- * Les modifications locales en attente auront leur propre magasin
- * (jalon 3) : ce magasin-ci ne contient que ce qui est sur GitHub.
+ * Le magasin « fichiers » ne contient que ce qui est sur GitHub. Les
+ * modifications locales pas encore envoyées vivent dans « brouillon ».
  */
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import type { Plan } from '../domaine/plan'
 import type { Depot } from '../github/client'
 
 export const NOM_BASE = 'atelier'
@@ -32,21 +33,40 @@ export interface BaseSynchro {
   le: string
 }
 
+/** Plan modifié sur cet appareil et pas encore envoyé à GitHub. */
+export interface BrouillonPlan {
+  plan: Plan
+  /** SHA de plan.json au début des modifications : sert à détecter un conflit. */
+  shaPlanBase: string | null
+  /** Descriptions des opérations, pour le message de commit. */
+  descriptions: string[]
+  /** Sections dont la corbeille a été vidée : leurs fichiers seront supprimés. */
+  aSupprimer?: string[]
+  /** Augmente à chaque opération : distingue un brouillon modifié pendant l'envoi. */
+  revision: number
+  /** Date ISO de la dernière opération. */
+  modifieLe: string
+}
+
 interface Schema extends DBSchema {
   appareil: { key: 'connexion'; value: Connexion }
   synchro: { key: 'base'; value: BaseSynchro }
   fichiers: { key: string; value: FichierCache }
+  brouillon: { key: 'plan'; value: BrouillonPlan }
 }
 
 export class Cache {
   private constructor(private readonly db: IDBPDatabase<Schema>) {}
 
   static async ouvrir(nom: string = NOM_BASE): Promise<Cache> {
-    const db = await openDB<Schema>(nom, 1, {
-      upgrade(base) {
-        base.createObjectStore('appareil')
-        base.createObjectStore('synchro')
-        base.createObjectStore('fichiers', { keyPath: 'chemin' })
+    const db = await openDB<Schema>(nom, 2, {
+      upgrade(base, ancienneVersion) {
+        if (ancienneVersion < 1) {
+          base.createObjectStore('appareil')
+          base.createObjectStore('synchro')
+          base.createObjectStore('fichiers', { keyPath: 'chemin' })
+        }
+        if (ancienneVersion < 2) base.createObjectStore('brouillon')
       },
     })
     return new Cache(db)
@@ -92,19 +112,37 @@ export class Cache {
     ])
   }
 
+  async lireBrouillon(): Promise<BrouillonPlan | null> {
+    return (await this.db.get('brouillon', 'plan')) ?? null
+  }
+
+  async enregistrerBrouillon(brouillon: BrouillonPlan): Promise<void> {
+    await this.db.put('brouillon', brouillon, 'plan')
+  }
+
+  async effacerBrouillon(): Promise<void> {
+    await this.db.delete('brouillon', 'plan')
+  }
+
   /** Vide le manuscrit en cache (changement de dépôt). */
   async viderManuscrit(): Promise<void> {
-    const tx = this.db.transaction(['fichiers', 'synchro'], 'readwrite')
-    await Promise.all([tx.objectStore('fichiers').clear(), tx.objectStore('synchro').clear(), tx.done])
+    const tx = this.db.transaction(['fichiers', 'synchro', 'brouillon'], 'readwrite')
+    await Promise.all([
+      tx.objectStore('fichiers').clear(),
+      tx.objectStore('synchro').clear(),
+      tx.objectStore('brouillon').clear(),
+      tx.done,
+    ])
   }
 
   /** Déconnexion : efface le jeton et tout le cache de l'appareil. */
   async toutEffacer(): Promise<void> {
-    const tx = this.db.transaction(['appareil', 'fichiers', 'synchro'], 'readwrite')
+    const tx = this.db.transaction(['appareil', 'fichiers', 'synchro', 'brouillon'], 'readwrite')
     await Promise.all([
       tx.objectStore('appareil').clear(),
       tx.objectStore('fichiers').clear(),
       tx.objectStore('synchro').clear(),
+      tx.objectStore('brouillon').clear(),
       tx.done,
     ])
   }

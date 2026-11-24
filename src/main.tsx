@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { Atelier } from './etat/atelier'
 import './styles/base.css'
+import './styles/plan.css'
 
 const atelier = new Atelier()
 atelier.ecouterNavigateur()

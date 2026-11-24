@@ -6,6 +6,7 @@
 
 import type { BaseSynchro, Cache, FichierCache } from '../stockage/cache'
 import type { ClientGitHub, Depot } from './client'
+import { shaBlobGit } from './empreinte'
 import { lireArbreDuCommit, lireBlob, lireTete } from './lecture'
 
 export const CHEMIN_PLAN = 'plan.json'
@@ -28,6 +29,8 @@ export async function synchroniser(
   depot: Depot,
   branche: string,
   cache: Cache,
+  /** Contenus que l'appareil vient d'envoyer : inutile de les retélécharger. */
+  contenusConnus: readonly string[] = [],
   maintenant: () => Date = () => new Date(),
 ): Promise<ResultatSynchro> {
   const tete = await lireTete(client, depot, branche)
@@ -37,11 +40,19 @@ export async function synchroniser(
   const distant = await lireArbreDuCommit(client, depot, tete)
 
   const locaux = await cache.lireFichiers()
+  // Contenus déjà présents sur l'appareil, par empreinte : un fichier
+  // renommé ou que l'on vient d'envoyer n'est pas retéléchargé.
+  const parSha = new Map<string, string>()
+  for (const f of locaux.values()) parSha.set(f.sha, f.contenu)
+  for (const contenu of contenusConnus) parSha.set(await shaBlobGit(contenu), contenu)
+
   const aTelecharger: [chemin: string, sha: string][] = []
+  const reutilises: FichierCache[] = []
   for (const [chemin, sha] of distant.fichiers) {
-    if (faitPartieDuManuscrit(chemin) && locaux.get(chemin)?.sha !== sha) {
-      aTelecharger.push([chemin, sha])
-    }
+    if (!faitPartieDuManuscrit(chemin) || locaux.get(chemin)?.sha === sha) continue
+    const connu = parSha.get(sha)
+    if (connu === undefined) aTelecharger.push([chemin, sha])
+    else reutilises.push({ chemin, sha, contenu: connu })
   }
   const aSupprimer = [...locaux.keys()].filter(
     (chemin) => !distant.fichiers.has(chemin) || !faitPartieDuManuscrit(chemin),
@@ -55,7 +66,7 @@ export async function synchroniser(
   })
 
   const nouvelleBase: BaseSynchro = { commit: distant.commit, le: maintenant().toISOString() }
-  await cache.appliquerSynchro(nouvelleBase, nouveaux, aSupprimer)
+  await cache.appliquerSynchro(nouvelleBase, [...reutilises, ...nouveaux], aSupprimer)
   return { commit: distant.commit, telecharges: nouveaux.length, supprimes: aSupprimer.length }
 }
 

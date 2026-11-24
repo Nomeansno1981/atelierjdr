@@ -7,28 +7,48 @@ const FORMAT = new Intl.DateTimeFormat('fr-FR', {
   minute: '2-digit',
 })
 
-function quand(le: string | null): string {
-  return le ? ` (copie du ${FORMAT.format(new Date(le))})` : ''
+function enAttenteTexte(n: number): string {
+  return `${n} modification${n > 1 ? 's' : ''} en attente`
 }
 
-export function IndicateurSynchro({ synchro }: { synchro: EtatSynchro }) {
+interface Proprietes {
+  synchro: EtatSynchro
+  enAttente: number
+  conflit: boolean
+}
+
+/** Indicateur discret et toujours visible de l'état de l'enregistrement. */
+export function IndicateurSynchro({ synchro, enAttente, conflit }: Proprietes) {
   let libelle: string
-  switch (synchro.etat) {
-    case 'en-cours':
-      libelle = 'Synchronisation…'
-      break
-    case 'a-jour':
-      libelle = 'Synchronisé'
-      break
-    case 'hors-ligne':
-      libelle = `Hors ligne${quand(synchro.le)}`
-      break
-    case 'erreur':
-      libelle = `Échec de la synchronisation${quand(synchro.le)}`
-      break
+  let classe: string = synchro.etat
+  if (conflit) {
+    libelle = 'Conflit'
+    classe = 'conflit'
+  } else {
+    switch (synchro.etat) {
+      case 'en-cours':
+        libelle = 'Synchronisation…'
+        break
+      case 'envoi':
+        libelle = 'Envoi…'
+        break
+      case 'a-jour':
+        libelle = 'Synchronisé'
+        break
+      case 'local':
+        libelle = 'Enregistré sur l’appareil'
+        break
+      case 'hors-ligne':
+        libelle = enAttente > 0 ? `Hors ligne, ${enAttenteTexte(enAttente)}` : 'Hors ligne'
+        break
+      case 'erreur':
+        libelle = enAttente > 0 ? `Échec de l’envoi, ${enAttenteTexte(enAttente)}` : 'Échec de la synchronisation'
+        break
+    }
   }
+  const le = 'le' in synchro && synchro.le ? `Dernière synchronisation : ${FORMAT.format(new Date(synchro.le))}` : undefined
   return (
-    <p className={`indicateur indicateur-${synchro.etat}`} role="status" aria-live="polite">
+    <p className={`indicateur indicateur-${classe}`} role="status" aria-live="polite" title={le}>
       <span className="indicateur-point" aria-hidden="true" />
       {libelle}
     </p>

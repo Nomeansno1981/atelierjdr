@@ -26,11 +26,7 @@ export function App({ atelier }: { atelier: Atelier }) {
       )
     case 'atelier':
       return (
-        <EcranAtelier
-          etat={etat}
-          synchroniser={() => void atelier.synchroniser()}
-          seDeconnecter={() => void atelier.seDeconnecter()}
-        />
+        <EcranAtelier atelier={atelier} etat={etat} />
       )
   }
 }

@@ -13,6 +13,8 @@ export interface InfosDepot {
 export interface InstantaneDistant {
   /** SHA du commit en tête de branche. */
   commit: string
+  /** SHA de l'arbre racine de ce commit. */
+  arbre: string
   /** Chemin du fichier → SHA de son blob. */
   fichiers: Map<string, string>
 }
@@ -60,7 +62,7 @@ export async function lireArbreDuCommit(
     const entree = objet(brute)
     if (entree.type === 'blob') fichiers.set(chaine(entree, 'path'), chaine(entree, 'sha'))
   }
-  return { commit, fichiers }
+  return { commit, arbre, fichiers }
 }
 
 export async function lireBlob(client: ClientGitHub, depot: Depot, sha: string): Promise<string> {
@@ -74,6 +76,10 @@ export async function lireBlob(client: ClientGitHub, depot: Depot, sha: string):
  * d'ordre des octets éventuelle est conservée, et un fichier qui n'est pas
  * en UTF-8 valide est refusé plutôt que corrompu.
  */
+export function racineDepot(depot: Depot): string {
+  return racine(depot)
+}
+
 export function decoderBase64Utf8(base64: string): string {
   const binaire = atob(base64.replace(/\s/g, ''))
   const octets = Uint8Array.from(binaire, (c) => c.charCodeAt(0))

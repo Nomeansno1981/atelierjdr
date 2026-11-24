@@ -298,3 +298,39 @@ class Verificateur {
     return null
   }
 }
+
+/**
+ * Écrit plan.json : indentation de deux espaces, clés dans un ordre fixe,
+ * fin de ligne finale. Relire puis réécrire un plan donne les mêmes octets.
+ */
+export function serialiserPlan(plan: Plan): string {
+  const donnees = {
+    version: plan.version,
+    livre: {
+      titre: plan.livre.titre,
+      pagesTotal: plan.livre.pagesTotal,
+      motsParPage: plan.livre.motsParPage,
+      premierePage: plan.livre.premierePage,
+    },
+    parties: plan.parties.map((p) => ({ id: p.id, titre: p.titre, numerotee: p.numerotee })),
+    sections: plan.sections.map(ordonnerSection),
+    corbeille: plan.corbeille.map((e) => ({
+      section: ordonnerSection(e.section),
+      supprimeLe: e.supprimeLe,
+      position: e.position,
+    })),
+  }
+  return JSON.stringify(donnees, null, 2) + '\n'
+}
+
+function ordonnerSection(s: Section): Record<string, unknown> {
+  const debut = { id: s.id, type: s.type, titre: s.titre }
+  const fin = { partie: s.partie, statut: s.statut, pages: s.pages, debut: s.debut, resume: s.resume }
+  if (s.type === 'hors-texte') return { ...debut, ...fin }
+  return { ...debut, fichier: s.fichier, ...fin, motsParPage: s.motsParPage }
+}
+
+/** Sections du plan puis sections de la corbeille. */
+export function toutesLesSections(plan: Plan): Section[] {
+  return [...plan.sections, ...plan.corbeille.map((e) => e.section)]
+}

@@ -2,7 +2,7 @@
 
 Outil personnel pour planifier et rédiger le manuel de *Katastrophê* : un chemin de fer (le plan du livre, page par page) et un éditeur Markdown. Le site est statique, hébergé sur GitHub Pages ; le manuscrit vit dans un dépôt GitHub privé, en fichiers Markdown lisibles sans l’Atelier.
 
-> **État : jalon 1 (socle).** Le site se connecte au dépôt, lit `plan.json` et les sections, les garde en cache sur l’appareil et affiche la liste des sections. Le chemin de fer, l’éditeur et l’écriture vers GitHub arrivent aux jalons suivants.
+> **État : jalon 2 (mode plan).** Le chemin de fer est en place : grille en doubles pages, pagination, post-its, glisser-déposer, création, modification, corbeille, annulation. Les modifications du plan sont enregistrées sur l’appareil puis envoyées à GitHub. L’éditeur de texte arrive au jalon 3.
 
 ## Les deux dépôts
 
@@ -60,6 +60,28 @@ Le site ne contient aucun texte du manuel : sans jeton, il n’affiche que l’�
 ### 4. Se connecter
 
 Ouvrez le site, saisissez `VOTRE-NOM/katastrophe` et le jeton. La liste des sections s’affiche. Une copie du manuscrit est gardée sur l’appareil : si GitHub ne répond pas, le site affiche cette copie.
+
+## Utiliser le plan
+
+Le plan est un chemin de fer : chaque section est un post-it qui couvre autant de pages que son budget. On choisit l’**ordre** des sections ; les pages se calculent, pages blanches comprises (une section qui doit commencer à gauche ou à droite en insère une si nécessaire).
+
+| Action | Souris | Doigt | Clavier |
+| --- | --- | --- | --- |
+| Déplacer une section | Glisser le post-it | Appui long (un tiers de seconde), puis glisser | Espace, flèches, puis Espace ou Entrée (Échap annule) |
+| Modifier | Bouton « … » | Bouton « … » | Tab jusqu’au bouton, Entrée |
+| Changer le nombre de pages | Boutons − et + | Boutons − et + | |
+| Créer une section | « + » au bord gauche d’un post-it (avant lui) ou « Nouvelle section » en fin de grille | idem | |
+| Annuler, rétablir | Boutons en haut à gauche | idem | Cmd/Ctrl+Z, Cmd/Ctrl+Maj+Z |
+
+- **Supprimer** se fait depuis le panneau « … » : la section part dans la corbeille, et un bandeau « Annuler » reste 10 secondes. La corbeille (icône en haut à droite) permet de restaurer une section à sa place. La vider demande confirmation et ne s’annule pas ; les fichiers restent dans l’historique GitHub.
+- **Couleur** du post-it : son statut (gris à écrire, jaune premier jet, bleu relu, vert définitif). **Étiquette** en haut : sa partie.
+- **Jauge** : mots écrits sur la cible (pages × mots par page) ; elle vire au rouge au-delà de 110 %.
+- **Pages hachurées** : en gris, une page blanche insérée automatiquement ; en rouge, une page au-delà du nombre de pages prévu.
+- **Réglages** (icône à curseurs) : titre, nombre de pages, mots par page, parties. La déconnexion s’y trouve aussi.
+- **Enregistrement** : chaque modification est écrite sur l’appareil immédiatement, puis envoyée à GitHub environ 5 secondes après la dernière, en un seul commit. L’indicateur en haut à droite dit où elle en est.
+- **Conflit** : si le plan a été modifié sur un autre appareil pendant que vous travailliez, un bandeau vous laisse choisir la version à garder. L’autre reste dans l’historique GitHub.
+
+En attendant l’éditeur (jalon 3), toucher une section de texte ouvre son panneau de modification.
 
 ## Installer sur iPhone et iPad
 
