@@ -59,7 +59,7 @@ Le site ne contient aucun texte du manuel : sans jeton, il n’affiche que l’�
 
 ### 4. Se connecter
 
-Ouvrez le site, saisissez `VOTRE-NOM/katastrophe` et le jeton. La liste des sections s’affiche ; elle reste disponible hors ligne sur cet appareil.
+Ouvrez le site, saisissez `VOTRE-NOM/katastrophe` et le jeton. La liste des sections s’affiche. Une copie du manuscrit est gardée sur l’appareil : si GitHub ne répond pas, le site affiche cette copie.
 
 ## Installer sur iPhone et iPad
 
@@ -67,7 +67,7 @@ Ouvrez le site, saisissez `VOTRE-NOM/katastrophe` et le jeton. La liste des sect
 2. Touchez le bouton **Partager**, puis **Sur l’écran d’accueil**, puis **Ajouter**.
 3. Ouvrez l’Atelier depuis l’icône et **saisissez le jeton dans l’application installée** : elle ne partage pas son stockage avec Safari.
 
-L’installation protège aussi le cache : Safari peut effacer les données d’un site non installé après sept jours sans visite. L’ouverture complètement hors ligne (sans réseau dès le lancement) arrive au jalon 6.
+L’installation protège aussi le cache : Safari peut effacer les données d’un site non installé après sept jours sans visite. Le site lui-même a besoin du réseau pour s’ouvrir : il n’est pas prévu pour fonctionner en mode avion.
 
 ## Développement
 

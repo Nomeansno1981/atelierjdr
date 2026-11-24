@@ -11,7 +11,7 @@ const CORS = {
 }
 
 /**
- * Branche la page sur un faux GitHub. `hors ligne` simule une coupure : les
+ * Branche la page sur un faux GitHub. `couper` simule une panne de GitHub : les
  * requêtes vers api.github.com échouent comme sans réseau.
  */
 export async function brancherFauxGitHub(page: Page, faux: FauxGitHub): Promise<{ couper: (oui: boolean) => void }> {

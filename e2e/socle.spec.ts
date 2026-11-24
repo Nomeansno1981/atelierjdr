@@ -57,7 +57,7 @@ test('un jeton refusé reste sur l’écran de connexion avec un message', async
   await expect(page.getByLabel('Jeton d’accès personnel')).toBeVisible()
 })
 
-test('rouvert hors ligne, le site affiche le manuscrit depuis le cache', async ({ page }) => {
+test('GitHub injoignable : le site affiche le manuscrit depuis le cache', async ({ page }) => {
   const erreurs = surveillerErreurs(page)
   const reseau = await brancherFauxGitHub(page, await FauxGitHub.creer(lireExemple()))
   await page.goto('./')
