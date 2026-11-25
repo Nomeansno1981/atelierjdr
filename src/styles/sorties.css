@@ -1,0 +1,170 @@
+/* Atelier : lecture continue. */
+
+.mode-lecture {
+  min-height: 100dvh;
+}
+
+.lecture {
+  /* Environ 65 à 75 signes par ligne. */
+  max-width: 34em;
+  margin: 0 auto;
+  padding: 16px max(16px, env(safe-area-inset-right)) max(64px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  font-family: var(--police-ecriture);
+  font-size: 1.15rem;
+  line-height: 1.6;
+}
+
+.lecture-entete {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+  font-family: var(--police-texte);
+  font-size: 1rem;
+}
+
+.lecture-entete h1 {
+  font-family: var(--police-ecriture);
+  font-size: 2rem;
+}
+
+.lecture-partie {
+  margin: 56px 0 24px;
+  font-size: 1.6rem;
+  text-align: center;
+}
+
+.lecture-section {
+  margin: 32px 0;
+}
+
+.lecture-section h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.lecture-section h2 button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lecture-section h2 button:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.repere {
+  margin: 2px 0 12px;
+  font-family: var(--police-texte);
+  font-size: 0.8rem;
+  color: var(--texte-doux);
+  font-variant-numeric: tabular-nums;
+}
+
+.lecture-texte :is(p, ul, ol, blockquote, table, pre) {
+  margin: 0 0 0.9em;
+}
+
+.lecture-texte h3 {
+  margin: 1.4em 0 0.4em;
+  font-size: 1.15em;
+}
+
+.lecture-texte :is(h4, h5, h6) {
+  margin: 1.2em 0 0.3em;
+  font-size: 1em;
+}
+
+.lecture-texte blockquote {
+  padding-left: 1em;
+  border-left: 3px solid var(--bordure);
+  color: var(--texte-doux);
+}
+
+.lecture-texte table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.lecture-texte :is(th, td) {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--bordure);
+  text-align: left;
+}
+
+.lecture-texte code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.lecture-texte pre {
+  overflow-x: auto;
+}
+
+.section-vide {
+  font-style: italic;
+}
+
+.encadre-hors-texte {
+  margin: 32px 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+  font-family: var(--police-texte);
+  font-size: 0.95rem;
+}
+
+.encadre-hors-texte p {
+  margin: 0;
+}
+
+.encadre-hors-texte .icone {
+  vertical-align: -2px;
+}
+
+.sommaire {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sommaire button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.sommaire-partie button {
+  margin-top: 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+@media (min-width: 1024px) {
+  .mode-lecture {
+    display: grid;
+    grid-template-columns: var(--colonne-sections) minmax(0, 1fr);
+  }
+}
+
+/* Les sauts du sommaire s'arrêtent sous la barre fixe, pas dessous. */
+.lecture [id^='lecture-'] {
+  scroll-margin-top: 112px;
+}

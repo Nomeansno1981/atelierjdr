@@ -4,6 +4,7 @@
  * mal formé avec des messages en français plutôt que de deviner.
  */
 
+import { modeleValide } from './compilation'
 import { REGLES_PAR_DEFAUT, type ReglesTypo } from './typographie/regles'
 
 export const STATUTS = ['a-ecrire', 'premier-jet', 'relu', 'definitif'] as const
@@ -68,6 +69,7 @@ export interface ElementCorbeille {
 /** Réglages partagés entre appareils. Facultatifs : absents, les valeurs par défaut s'appliquent. */
 export interface ReglagesLivre {
   typographie: ReglesTypo
+  compilation?: { modele: string }
 }
 
 export interface Plan {
@@ -170,7 +172,13 @@ function lireReglages(v: Verificateur, brut: unknown): ReglagesLivre | undefined
     const valeur = v.booleen(typo[cle], `reglages.typographie.${cle}`)
     if (valeur !== null) typographie[cle] = valeur
   }
-  return { typographie }
+  if (o.compilation === undefined) return { typographie }
+  const compilation = v.objet(o.compilation, 'reglages.compilation')
+  const modele = compilation ? v.chaine(compilation.modele, 'reglages.compilation.modele') : null
+  if (modele !== null && !modeleValide(modele)) {
+    v.signaler('reglages.compilation.modele : un nom en .md contenant {n}, sans dossier, est attendu')
+  }
+  return modele ? { typographie, compilation: { modele } } : { typographie }
 }
 
 function nomSection(i: number, s: { titre: string }): string {
@@ -350,6 +358,7 @@ export function serialiserPlan(plan: Plan): string {
               suspension: plan.reglages.typographie.suspension,
               espaceFine: plan.reglages.typographie.espaceFine,
             },
+            ...(plan.reglages.compilation ? { compilation: { modele: plan.reglages.compilation.modele } } : {}),
           },
         }
       : {}),

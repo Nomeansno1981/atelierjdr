@@ -313,6 +313,36 @@ async function ajouterTextes(
   return { resultats, conflits, contenus }
 }
 
+/**
+ * Écrit des fichiers dans le dépôt en un commit, sans toucher au reste :
+ * compilation et script de compilation. Recommence si la branche a bougé.
+ */
+export async function ecrireFichiers(
+  client: ClientGitHub,
+  depot: Depot,
+  branche: string,
+  fichiers: readonly { chemin: string; contenu: string }[],
+  message: string,
+): Promise<string> {
+  const racine = racineDepot(depot)
+  const nomRef = branche.split('/').map(encodeURIComponent).join('/')
+  const tree: EntreeArbre[] = fichiers.map((f) => ({ path: f.chemin, mode: '100644', type: 'blob', content: f.contenu }))
+  for (let essai = 0; essai < ESSAIS; essai++) {
+    const tete = await lireTete(client, depot, branche)
+    const instantane = await lireArbreDuCommit(client, depot, tete)
+    const arbre = await client.ecrire('POST', `${racine}/git/trees`, { base_tree: instantane.arbre, tree })
+    const commit = await client.ecrire('POST', `${racine}/git/commits`, { message, tree: sha(arbre), parents: [tete] })
+    try {
+      await client.ecrire('PATCH', `${racine}/git/refs/heads/${nomRef}`, { sha: sha(commit), force: false })
+      return sha(commit)
+    } catch (e) {
+      if (e instanceof ErreurGitHub && e.nature === 'concurrence') continue
+      throw e
+    }
+  }
+  throw new ErreurGitHub('concurrence', 'Le dépôt change trop vite : réessayez dans un instant.')
+}
+
 /** « 2026-11-25-1432 », à l'heure de l'appareil. */
 function horodatage(d: Date): string {
   const deux = (n: number) => String(n).padStart(2, '0')

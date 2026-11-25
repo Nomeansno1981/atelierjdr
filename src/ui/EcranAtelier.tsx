@@ -9,6 +9,8 @@ import { useRoute } from './routes'
 // L'éditeur (CodeMirror) est chargé à part : le plan s'affiche sans l'attendre.
 const chargerRedaction = () => import('./redaction/ModeRedaction')
 const ModeRedaction = lazy(async () => ({ default: (await chargerRedaction()).ModeRedaction }))
+// La lecture continue (rendu Markdown) est chargée à la demande.
+const LectureContinue = lazy(() => import('./sorties/LectureContinue'))
 
 interface Proprietes {
   atelier: Atelier
@@ -28,6 +30,15 @@ export function EcranAtelier({ atelier, etat }: Proprietes) {
   }, [])
 
   if (manuscrit?.plan) {
+    if (route.vue === 'lecture') {
+      return (
+        <FiletErreur>
+          <Suspense fallback={<p className="ecran-attente">Ouverture de la lecture…</p>}>
+            <LectureContinue etat={etat} plan={manuscrit.plan} naviguer={naviguer} />
+          </Suspense>
+        </FiletErreur>
+      )
+    }
     if (route.vue === 'section') {
       return (
         <FiletErreur>

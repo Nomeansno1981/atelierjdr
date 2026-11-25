@@ -31,6 +31,8 @@ export interface BaseSynchro {
   commit: string
   /** Date ISO de la synchronisation. */
   le: string
+  /** Noms des fichiers de compilations/ sur GitHub (pas leur contenu). */
+  compilations?: string[]
 }
 
 /** Plan modifié sur cet appareil et pas encore envoyé à GitHub. */

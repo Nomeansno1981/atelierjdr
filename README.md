@@ -2,7 +2,7 @@
 
 Outil personnel pour planifier et rédiger le manuel de *Katastrophê* : un chemin de fer (le plan du livre, page par page) et un éditeur Markdown. Le site est statique, hébergé sur GitHub Pages ; le manuscrit vit dans un dépôt GitHub privé, en fichiers Markdown lisibles sans l’Atelier.
 
-> **État : jalon 4 (typographie).** Le plan (chemin de fer), l’éditeur Markdown et la typographie française automatique sont en place. Tout est enregistré sur l’appareil, puis envoyé à GitHub. La lecture continue et la compilation arrivent au jalon 5.
+> **État : jalon 5 (sorties).** Plan, éditeur, typographie, lecture continue, compilation (site et script Python identiques) et export .zip sont en place. Le jalon 6 portera sur la robustesse : conflits entre appareils, installation sur l’écran d’accueil, sécurité.
 
 ## Les deux dépôts
 
@@ -115,6 +115,49 @@ Pendant la frappe, l’éditeur applique la convention du projet :
 - Les **titres et résumés** suivent la même convention quand vous les validez.
 
 **Sur iPhone et iPad**, désactivez la « Ponctuation intelligente » d’iOS (Réglages › Général › Clavier) : elle transforme `--` en tiret cadratin, ce que la convention du projet exclut. Les guillemets anglais qu’elle pose sont, eux, convertis en guillemets français par l’Atelier.
+
+## Lire, compiler, exporter
+
+Ces trois fonctions sont dans le menu **Outils** du plan.
+
+- **Lecture continue** : toutes les sections à la suite, mises en page pour la lecture, avec les titres de parties et de sections placés comme à la compilation, les hors-texte en encadré et, sous chaque titre, ses pages et ses mots. La table des matières (à gauche, ou « Sommaire » sur téléphone) mène à une section ; toucher le titre d’une section l’ouvre dans l’éditeur. Une case masque les sections « à écrire » encore vides. Lecture seule.
+- **Compiler** produit un seul fichier Markdown pour le pipeline Python puis InDesign. Il propose le numéro de version suivant, laisse inclure ou exclure les sections vides et ajouter des repères de pages, puis télécharge le fichier ou l’enregistre dans `compilations/` du dépôt. Le nom suit le modèle `Katastrophe__v{n}.md`, modifiable dans les Réglages.
+- **Exporter le manuscrit (.zip)** télécharge `plan.json`, les sections, la corbeille et le script de compilation, depuis l’appareil : cela marche même si GitHub ne répond pas, et l’archive contient aussi les modifications pas encore envoyées.
+
+### Format de la compilation
+
+```
+# Partie I — Présentation
+
+<!-- HORS-TEXTE : Page de titre (p. 1) -->
+
+## Avant-propos
+
+Texte exact de la section…
+
+# Lexique
+
+## Lexique
+<!-- pages 18-19 -->
+
+Texte…
+```
+
+Le texte des sections n’est jamais modifié, typographie comprise ; seuls les sauts de ligne en fin de texte sont retirés. Une ligne vide sépare deux blocs ; le fichier est en UTF-8, avec des fins de ligne LF et un seul saut de ligne final. Les repères `<!-- pages … -->` n’apparaissent que si on les demande.
+
+### Compiler sans le site : `outils/compiler.py`
+
+Le dépôt du manuscrit contient `outils/compiler.py` (l’Atelier l’y met à jour à chaque compilation enregistrée dans le dépôt). Il produit **exactement** le même fichier que le site, octet pour octet, à partir d’un simple clone, sans rien installer d’autre que Python 3 :
+
+```bash
+python3 outils/compiler.py
+```
+
+```bash
+python3 outils/compiler.py --version 27 --sans-vides --reperes
+```
+
+Sans `--version`, il prend la version suivant la plus haute trouvée dans `compilations/`. `--sortie -` écrit sur la sortie standard. Un test automatique de l’Atelier compare les deux sorties à chaque modification.
 
 ## Installer sur iPhone et iPad
 

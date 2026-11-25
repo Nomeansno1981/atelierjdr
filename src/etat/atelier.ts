@@ -17,7 +17,7 @@ import {
   type ClientGitHub,
   type Depot,
 } from '../github/client'
-import { envoyer, messageCommit, type TexteAEnvoyer } from '../github/ecriture'
+import { ecrireFichiers, envoyer, messageCommit, type TexteAEnvoyer } from '../github/ecriture'
 import { shaBlobGit } from '../github/empreinte'
 import { lireInfosDepot, lireTete } from '../github/lecture'
 import { CHEMIN_PLAN, synchroniser } from '../github/synchro'
@@ -63,6 +63,8 @@ export interface Manuscrit {
   textesModifies: ReadonlySet<string>
   /** Sections en conflit : chemin de la sauvegarde de la version locale. */
   conflitsTexte: ReadonlyMap<string, string>
+  /** Noms des compilations déjà enregistrées dans le dépôt. */
+  compilations: readonly string[]
 }
 
 export interface ConnexionActive extends Connexion {
@@ -103,6 +105,7 @@ interface DonneesCache {
   erreurPlan: string | null
   /** Fichiers .md en cache, par chemin. */
   fichiers: ReadonlyMap<string, FichierCache>
+  compilations: readonly string[]
 }
 
 interface EntreeHistorique {
@@ -198,6 +201,7 @@ export class Atelier {
       textesDistants,
       textesModifies: new Set(this.brouillonsTexte.keys()),
       conflitsTexte,
+      compilations: this.donnees.compilations,
     }
   }
 
@@ -492,6 +496,25 @@ export class Atelier {
     await this.synchroniser()
   }
 
+  /**
+   * Enregistre des fichiers dans le dépôt (compilation et script) en un
+   * commit, après avoir envoyé ce qui était en attente. Renvoie null si tout
+   * s'est bien passé, sinon un message d'erreur.
+   */
+  async enregistrerFichiers(fichiers: readonly { chemin: string; contenu: string }[], message: string): Promise<string | null> {
+    const etat = this.etat
+    if (etat.phase !== 'atelier' || !this.client) return 'L’Atelier n’est pas connecté.'
+    await this.envoyerMaintenant()
+    if (this.conflit) return 'Réglez d’abord le conflit sur le plan.'
+    try {
+      await ecrireFichiers(this.client, etat.connexion.depot, etat.connexion.branche, fichiers, message)
+    } catch (e) {
+      return messageErreur(e)
+    }
+    await this.synchroniser()
+    return null
+  }
+
   /** Écrit et envoie tout de suite ce qui est en attente (Cmd+S, changement de section…). */
   async envoyerMaintenant(): Promise<void> {
     await this.ecrireTextes()
@@ -711,7 +734,7 @@ export class Atelier {
     const [tous, base] = await Promise.all([cache.lireFichiers(), cache.lireBase()])
     if (!base) return null
     const fichiers = new Map([...tous].filter(([chemin]) => chemin.endsWith('.md')))
-    const vide: DonneesCache = { plan: null, shaPlan: null, erreurPlan: null, fichiers }
+    const vide: DonneesCache = { plan: null, shaPlan: null, erreurPlan: null, fichiers, compilations: base.compilations ?? [] }
     const fichierPlan = tous.get(CHEMIN_PLAN)
     if (!fichierPlan) {
       return {

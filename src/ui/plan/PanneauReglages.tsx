@@ -1,4 +1,5 @@
 import { useId, useState, type SubmitEvent } from 'react'
+import { MODELE_PAR_DEFAUT, modeleValide } from '../../domaine/compilation'
 import { nouvelIdPartie, type Reglages } from '../../domaine/operations'
 import { reglesTypo, type Partie, type Plan } from '../../domaine/plan'
 import type { ReglesTypo } from '../../domaine/typographie/regles'
@@ -29,6 +30,7 @@ export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDe
   const [motsParPage, setMotsParPage] = useState(String(plan.livre.motsParPage))
   const [parties, setParties] = useState<Partie[]>(plan.parties)
   const [typographie, setTypographie] = useState<ReglesTypo>(reglesTypo(plan))
+  const [modele, setModele] = useState(plan.reglages?.compilation?.modele ?? MODELE_PAR_DEFAUT)
   const insecablesVisibles = useInsecablesVisibles()
   const id = useId()
   const utilisees = new Set(plan.sections.map((s) => s.partie))
@@ -58,6 +60,8 @@ export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDe
       motsParPage: Number.parseInt(motsParPage, 10) || plan.livre.motsParPage,
       parties: parties.map((p) => ({ ...p, titre: p.titre.trim() || 'Sans titre' })),
       typographie,
+      // Le modèle n'est écrit dans plan.json que s'il diffère de celui par défaut.
+      ...(modele !== (plan.reglages?.compilation?.modele ?? MODELE_PAR_DEFAUT) ? { modeleCompilation: modele } : {}),
     })
   }
 
@@ -171,6 +175,24 @@ export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDe
             Ajouter une partie
           </button>
         </fieldset>
+
+        <label htmlFor={`${id}-modele`}>Nom des compilations</label>
+        <input
+          id={`${id}-modele`}
+          value={modele}
+          onChange={(e) => {
+            setModele(e.target.value)
+            e.target.setCustomValidity(
+              modeleValide(e.target.value) ? '' : 'Un nom en .md contenant {n} (le numéro de version), sans dossier.',
+            )
+          }}
+          spellCheck={false}
+          autoCapitalize="none"
+          required
+        />
+        <p className="aide">
+          <code>{'{n}'}</code> est remplacé par le numéro de version.
+        </p>
 
         <fieldset className="parties">
           <legend>Typographie pendant la frappe</legend>

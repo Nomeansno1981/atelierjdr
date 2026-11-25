@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
   changerPages,
   creerSection,
@@ -25,9 +25,12 @@ import { PanneauCreation } from './PanneauCreation'
 import { PanneauReglages } from './PanneauReglages'
 import { PanneauSection } from './PanneauSection'
 
+const PanneauCompilation = lazy(() => import('../sorties/PanneauCompilation'))
+
 type Panneau =
   | { type: 'section'; id: string }
   | { type: 'recherche' }
+  | { type: 'compilation' }
   | { type: 'creation'; index: number }
   | { type: 'corbeille' }
   | { type: 'reglages' }
@@ -69,6 +72,7 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
   const [panneau, setPanneau] = useState<Panneau | null>(null)
   const [supprimee, setSupprimee] = useState<{ id: string; titre: string } | null>(null)
   const [zoom, setZoom] = useState<Zoom>(lireZoom)
+  const menu = useRef<HTMLDetailsElement>(null)
 
   const mots = useMemo(() => motsParSection(plan, textes ?? new Map<string, string>()), [plan, textes])
   const pagination = useMemo(() => paginer(plan.sections, plan.livre.premierePage), [plan.sections, plan.livre.premierePage])
@@ -106,6 +110,19 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
   }, [atelier])
 
   const titre = (id: string) => plan.sections.find((s) => s.id === id)?.titre ?? ''
+  const depot = etat.connexion.depot
+  const cleDepot = `${depot.proprietaire}/${depot.nom}`.toLowerCase()
+
+  function choisir(action: () => void) {
+    if (menu.current) menu.current.open = false
+    action()
+  }
+
+  /** Archive .zip du manuscrit, depuis l'appareil : utilisable même si GitHub ne répond pas. */
+  async function exporter() {
+    const { archiveManuscrit, nomArchive, telecharger } = await import('../sorties/fichiers')
+    telecharger(nomArchive(plan, new Date()), archiveManuscrit(plan, textes ?? new Map<string, string>()), 'application/zip')
+  }
   /** Titres et résumés suivent la convention typographique, une fois validés. */
   const typo = (texte: string) => normaliser(texte, reglesTypo(plan)).texte
 
@@ -192,15 +209,23 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
             ))}
           </div>
           <span className="espace" />
-          <button
-            type="button"
-            onClick={() => {
-              setPanneau({ type: 'recherche' })
-            }}
-            title="Cmd/Ctrl+Maj+F"
-          >
-            Chercher
-          </button>
+          <details className="menu-outils" ref={menu}>
+            <summary>Outils</summary>
+            <div className="menu-contenu">
+              <button type="button" onClick={() => { choisir(() => { setPanneau({ type: 'recherche' }) }) }}>
+                Chercher dans le manuscrit <kbd>⌘⇧F</kbd>
+              </button>
+              <button type="button" onClick={() => { choisir(() => { naviguer({ vue: 'lecture' }) }) }}>
+                Lecture continue
+              </button>
+              <button type="button" onClick={() => { choisir(() => { setPanneau({ type: 'compilation' }) }) }}>
+                Compiler…
+              </button>
+              <button type="button" onClick={() => { choisir(() => void exporter()) }}>
+                Exporter le manuscrit (.zip)
+              </button>
+            </div>
+          </details>
           <button
             type="button"
             className="bouton-icone"
@@ -390,6 +415,20 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
             setPanneau(null)
           }}
         />
+      )}
+      {panneau?.type === 'compilation' && (
+        <Suspense fallback={null}>
+          <PanneauCompilation
+            plan={plan}
+            textes={textes ?? new Map<string, string>()}
+            compilations={etat.manuscrit?.compilations ?? []}
+            cleDepot={cleDepot}
+            enregistrer={(fichiers, message) => atelier.enregistrerFichiers(fichiers, message)}
+            fermer={() => {
+              setPanneau(null)
+            }}
+          />
+        </Suspense>
       )}
       {panneau?.type === 'reglages' && (
         <PanneauReglages

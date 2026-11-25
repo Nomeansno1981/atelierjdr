@@ -180,6 +180,7 @@ export interface Reglages {
   motsParPage: number
   parties: Partie[]
   typographie?: ReglesTypo
+  modeleCompilation?: string
 }
 
 /**
@@ -196,7 +197,10 @@ export function modifierReglages(plan: Plan, reglages: Reglages): Plan {
     pagesTotal: Math.max(1, Math.round(reglages.pagesTotal)),
     motsParPage: Math.max(1, Math.round(reglages.motsParPage)),
   }
-  const reglagesLivre = reglages.typographie ? { ...plan.reglages, typographie: reglages.typographie } : plan.reglages
+  let reglagesLivre = reglages.typographie ? { ...plan.reglages, typographie: reglages.typographie } : plan.reglages
+  if (reglages.modeleCompilation !== undefined && reglagesLivre) {
+    reglagesLivre = { ...reglagesLivre, compilation: { modele: reglages.modeleCompilation } }
+  }
   return { ...plan, livre, parties, ...(reglagesLivre ? { reglages: reglagesLivre } : {}) }
 }
 

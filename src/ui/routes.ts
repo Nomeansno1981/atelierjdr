@@ -11,9 +11,10 @@ export interface Selection {
   fin: number
 }
 
-export type Route = { vue: 'plan' } | { vue: 'section'; id: string; selection: Selection | null }
+export type Route = { vue: 'plan' } | { vue: 'lecture' } | { vue: 'section'; id: string; selection: Selection | null }
 
 export function lireRoute(ancre: string): Route {
+  if (ancre === '#/lecture') return { vue: 'lecture' }
   const m = /^#\/section\/([a-z0-9]{6})(?:\?d=(\d+)&f=(\d+))?$/.exec(ancre)
   if (!m?.[1]) return { vue: 'plan' }
   const selection = m[2] !== undefined && m[3] !== undefined ? { debut: Number(m[2]), fin: Number(m[3]) } : null
@@ -22,6 +23,7 @@ export function lireRoute(ancre: string): Route {
 
 export function adresse(route: Route): string {
   if (route.vue === 'plan') return '#/'
+  if (route.vue === 'lecture') return '#/lecture'
   const s = route.selection ? `?d=${route.selection.debut}&f=${route.selection.fin}` : ''
   return `#/section/${route.id}${s}`
 }

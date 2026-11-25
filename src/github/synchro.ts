@@ -35,7 +35,8 @@ export async function synchroniser(
 ): Promise<ResultatSynchro> {
   const tete = await lireTete(client, depot, branche)
   const base = await cache.lireBase()
-  if (base?.commit === tete) return { commit: tete, telecharges: 0, supprimes: 0 }
+  // Un cache d'une version précédente n'a pas la liste des compilations : on la relit.
+  if (base?.commit === tete && base.compilations) return { commit: tete, telecharges: 0, supprimes: 0 }
 
   const distant = await lireArbreDuCommit(client, depot, tete)
 
@@ -65,7 +66,10 @@ export async function synchroniser(
     return fichier
   })
 
-  const nouvelleBase: BaseSynchro = { commit: distant.commit, le: maintenant().toISOString() }
+  const compilations = [...distant.fichiers.keys()]
+    .filter((c) => c.startsWith('compilations/'))
+    .map((c) => c.slice('compilations/'.length))
+  const nouvelleBase: BaseSynchro = { commit: distant.commit, le: maintenant().toISOString(), compilations }
   await cache.appliquerSynchro(nouvelleBase, [...reutilises, ...nouveaux], aSupprimer)
   return { commit: distant.commit, telecharges: nouveaux.length, supprimes: aSupprimer.length }
 }
