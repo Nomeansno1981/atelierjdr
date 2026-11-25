@@ -4,6 +4,7 @@ import { App } from './App'
 import { Atelier } from './etat/atelier'
 import './styles/base.css'
 import './styles/plan.css'
+import './styles/redaction.css'
 
 const atelier = new Atelier()
 atelier.ecouterNavigateur()

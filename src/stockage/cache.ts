@@ -48,18 +48,32 @@ export interface BrouillonPlan {
   modifieLe: string
 }
 
+/** Texte d'une section modifié sur cet appareil et pas encore envoyé. */
+export interface BrouillonTexte {
+  /** Identifiant de la section (stable, contrairement au chemin du fichier). */
+  id: string
+  contenu: string
+  /** SHA du blob sur GitHub quand la modification a commencé ; null si le fichier n'existait pas. */
+  shaBase: string | null
+  revision: number
+  modifieLe: string
+  /** Conflit détecté à l'envoi : la version locale est sauvegardée à ce chemin. */
+  conflit?: { chemin: string; shaDistant: string | null }
+}
+
 interface Schema extends DBSchema {
   appareil: { key: 'connexion'; value: Connexion }
   synchro: { key: 'base'; value: BaseSynchro }
   fichiers: { key: string; value: FichierCache }
   brouillon: { key: 'plan'; value: BrouillonPlan }
+  textes: { key: string; value: BrouillonTexte }
 }
 
 export class Cache {
   private constructor(private readonly db: IDBPDatabase<Schema>) {}
 
   static async ouvrir(nom: string = NOM_BASE): Promise<Cache> {
-    const db = await openDB<Schema>(nom, 2, {
+    const db = await openDB<Schema>(nom, 3, {
       upgrade(base, ancienneVersion) {
         if (ancienneVersion < 1) {
           base.createObjectStore('appareil')
@@ -67,6 +81,7 @@ export class Cache {
           base.createObjectStore('fichiers', { keyPath: 'chemin' })
         }
         if (ancienneVersion < 2) base.createObjectStore('brouillon')
+        if (ancienneVersion < 3) base.createObjectStore('textes', { keyPath: 'id' })
       },
     })
     return new Cache(db)
@@ -124,25 +139,40 @@ export class Cache {
     await this.db.delete('brouillon', 'plan')
   }
 
+  async lireBrouillonsTexte(): Promise<Map<string, BrouillonTexte>> {
+    const tous = await this.db.getAll('textes')
+    return new Map(tous.map((t) => [t.id, t]))
+  }
+
+  async enregistrerBrouillonTexte(brouillon: BrouillonTexte): Promise<void> {
+    await this.db.put('textes', brouillon)
+  }
+
+  async effacerBrouillonTexte(id: string): Promise<void> {
+    await this.db.delete('textes', id)
+  }
+
   /** Vide le manuscrit en cache (changement de dépôt). */
   async viderManuscrit(): Promise<void> {
-    const tx = this.db.transaction(['fichiers', 'synchro', 'brouillon'], 'readwrite')
+    const tx = this.db.transaction(['fichiers', 'synchro', 'brouillon', 'textes'], 'readwrite')
     await Promise.all([
       tx.objectStore('fichiers').clear(),
       tx.objectStore('synchro').clear(),
       tx.objectStore('brouillon').clear(),
+      tx.objectStore('textes').clear(),
       tx.done,
     ])
   }
 
   /** Déconnexion : efface le jeton et tout le cache de l'appareil. */
   async toutEffacer(): Promise<void> {
-    const tx = this.db.transaction(['appareil', 'fichiers', 'synchro', 'brouillon'], 'readwrite')
+    const tx = this.db.transaction(['appareil', 'fichiers', 'synchro', 'brouillon', 'textes'], 'readwrite')
     await Promise.all([
       tx.objectStore('appareil').clear(),
       tx.objectStore('fichiers').clear(),
       tx.objectStore('synchro').clear(),
       tx.objectStore('brouillon').clear(),
+      tx.objectStore('textes').clear(),
       tx.done,
     ])
   }

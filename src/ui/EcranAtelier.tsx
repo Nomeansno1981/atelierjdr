@@ -1,7 +1,14 @@
+import { lazy, Suspense, useEffect } from 'react'
 import type { Atelier, EtatOuvert } from '../etat/atelier'
 import { nomComplet } from '../github/client'
+import { FiletErreur } from './commun/FiletErreur'
 import { IndicateurSynchro } from './commun/IndicateurSynchro'
 import { ModePlan } from './plan/ModePlan'
+import { useRoute } from './routes'
+
+// L'éditeur (CodeMirror) est chargé à part : le plan s'affiche sans l'attendre.
+const chargerRedaction = () => import('./redaction/ModeRedaction')
+const ModeRedaction = lazy(async () => ({ default: (await chargerRedaction()).ModeRedaction }))
 
 interface Proprietes {
   atelier: Atelier
@@ -11,7 +18,35 @@ interface Proprietes {
 /** Le plan s'il est lisible ; sinon, un écran d'attente ou d'erreur. */
 export function EcranAtelier({ atelier, etat }: Proprietes) {
   const { manuscrit, synchro, connexion } = etat
-  if (manuscrit?.plan) return <ModePlan atelier={atelier} etat={etat} plan={manuscrit.plan} />
+  const [route, naviguer] = useRoute()
+  // Une fois le plan affiché, l'éditeur se charge en arrière-plan.
+  useEffect(() => {
+    const minuterie = setTimeout(() => void chargerRedaction().catch(() => undefined), 1000)
+    return () => {
+      clearTimeout(minuterie)
+    }
+  }, [])
+
+  if (manuscrit?.plan) {
+    if (route.vue === 'section') {
+      return (
+        <FiletErreur>
+          <Suspense fallback={<p className="ecran-attente">Ouverture de l’éditeur…</p>}>
+            <ModeRedaction
+              key="redaction"
+              atelier={atelier}
+              etat={etat}
+              plan={manuscrit.plan}
+              id={route.id}
+              selection={route.selection}
+              naviguer={naviguer}
+            />
+          </Suspense>
+        </FiletErreur>
+      )
+    }
+    return <ModePlan atelier={atelier} etat={etat} plan={manuscrit.plan} naviguer={naviguer} />
+  }
 
   function confirmerDeconnexion() {
     const ok = window.confirm(

@@ -12,6 +12,8 @@ import {
 import { paginer, type Pagination } from '../../domaine/pagination'
 import { LIBELLES_STATUT, STATUTS, type Plan } from '../../domaine/plan'
 import type { Atelier, EtatOuvert } from '../../etat/atelier'
+import { RechercheGlobale } from '../redaction/RechercheGlobale'
+import type { Route } from '../routes'
 import { IconeAnnuler, IconeCorbeille, IconeReglages, IconeRetablir, IconeSynchro } from '../commun/icones'
 import { IndicateurSynchro } from '../commun/IndicateurSynchro'
 import { formaterNombre, motsParSection, type MotsSection } from './format'
@@ -23,6 +25,7 @@ import { PanneauSection } from './PanneauSection'
 
 type Panneau =
   | { type: 'section'; id: string }
+  | { type: 'recherche' }
   | { type: 'creation'; index: number }
   | { type: 'corbeille' }
   | { type: 'reglages' }
@@ -56,9 +59,10 @@ interface Proprietes {
   atelier: Atelier
   etat: EtatOuvert
   plan: Plan
+  naviguer: (route: Route) => void
 }
 
-export function ModePlan({ atelier, etat, plan }: Proprietes) {
+export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
   const textes = etat.manuscrit?.textes
   const [panneau, setPanneau] = useState<Panneau | null>(null)
   const [supprimee, setSupprimee] = useState<{ id: string; titre: string } | null>(null)
@@ -78,9 +82,15 @@ export function ModePlan({ atelier, etat, plan }: Proprietes) {
     }
   }, [supprimee])
 
-  // Cmd/Ctrl+Z et Cmd/Ctrl+Maj+Z, hors des champs de saisie et des panneaux.
+  // Cmd/Ctrl+Z et Cmd/Ctrl+Maj+Z, hors des champs de saisie et des panneaux ;
+  // Cmd/Ctrl+Maj+F pour chercher dans tout le manuscrit.
   useEffect(() => {
     function surTouche(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setPanneau({ type: 'recherche' })
+        return
+      }
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return
       if (champDeSaisie(e.target) || document.querySelector('dialog[open]')) return
       e.preventDefault()
@@ -154,6 +164,15 @@ export function ModePlan({ atelier, etat, plan }: Proprietes) {
             ))}
           </div>
           <span className="espace" />
+          <button
+            type="button"
+            onClick={() => {
+              setPanneau({ type: 'recherche' })
+            }}
+            title="Cmd/Ctrl+Maj+F"
+          >
+            Chercher
+          </button>
           <button
             type="button"
             className="bouton-icone"
@@ -232,8 +251,10 @@ export function ModePlan({ atelier, etat, plan }: Proprietes) {
           plan={plan}
           mots={mots}
           ouvrir={(id) => {
-            // En attendant l'éditeur (jalon 3), ouvrir une section ouvre son panneau.
-            setPanneau({ type: 'section', id })
+            // Une section de texte s'ouvre dans l'éditeur ; un hors-texte, dans son panneau.
+            const s = plan.sections.find((x) => x.id === id)
+            if (s?.type === 'texte') naviguer({ vue: 'section', id, selection: null })
+            else setPanneau({ type: 'section', id })
           }}
           modifier={(id) => {
             setPanneau({ type: 'section', id })
@@ -317,6 +338,19 @@ export function ModePlan({ atelier, etat, plan }: Proprietes) {
           }}
           vider={() => {
             atelier.viderCorbeille()
+          }}
+          fermer={() => {
+            setPanneau(null)
+          }}
+        />
+      )}
+      {panneau?.type === 'recherche' && (
+        <RechercheGlobale
+          plan={plan}
+          textes={etat.manuscrit?.textes ?? new Map<string, string>()}
+          ouvrir={(id, debut, fin) => {
+            setPanneau(null)
+            naviguer({ vue: 'section', id, selection: { debut, fin } })
           }}
           fermer={() => {
             setPanneau(null)

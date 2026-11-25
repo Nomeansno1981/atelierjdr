@@ -11,7 +11,7 @@ import { lirePlan, serialiserPlan, type Plan, type SectionTexte } from '../domai
 import { lireExemple } from '../test/exemple'
 import { FauxGitHub, shaBlobGit } from '../test/fauxGitHub'
 import { creerClient, type Depot } from './client'
-import { changementsFichiers, envoyerPlan, messageCommit } from './ecriture'
+import { changementsFichiers, envoyer, messageCommit } from './ecriture'
 
 const exemple = lireExemple()
 const planExemple = (): Plan => lirePlan(exemple['plan.json'] ?? '')
@@ -130,7 +130,7 @@ describe('changementsFichiers', () => {
   })
 })
 
-describe('envoyerPlan', () => {
+describe('envoyer', () => {
   async function preparer() {
     const faux = await FauxGitHub.creer(exemple)
     const depot: Depot = { proprietaire: faux.proprietaire, nom: faux.nom }
@@ -142,7 +142,7 @@ describe('envoyerPlan', () => {
   it('écrit le plan et les fichiers en un seul commit', async () => {
     const { faux, depot, client, shaPlanBase } = await preparer()
     const local = modifierSection(planExemple(), LE_HEURT, { titre: 'Le choc' })
-    const r = await envoyerPlan(client, depot, 'main', { plan: local, shaPlanBase, message: 'Plan : essai', forcer: false })
+    const r = await envoyer(client, depot, 'main', { plan: local, shaPlanBase, message: () => 'Plan : essai', forcer: false })
     expect(r.type).toBe('envoye')
     const fichiers = faux.fichiers()
     expect(fichiers['plan.json']).toBe(serialiserPlan(local))
@@ -153,7 +153,7 @@ describe('envoyerPlan', () => {
 
   it('ne crée pas de commit s’il n’y a rien à envoyer', async () => {
     const { faux, depot, client, shaPlanBase } = await preparer()
-    const r = await envoyerPlan(client, depot, 'main', { plan: planExemple(), shaPlanBase, message: 'x', forcer: false })
+    const r = await envoyer(client, depot, 'main', { plan: planExemple(), shaPlanBase, message: () => 'x', forcer: false })
     expect(r.type).toBe('envoye')
     expect(faux.messages()).toHaveLength(1)
   })
@@ -163,7 +163,7 @@ describe('envoyerPlan', () => {
     const ailleurs = deplacer(planExemple(), LEXIQUE, 0)
     await faux.publier({ ...exemple, 'plan.json': serialiserPlan(ailleurs) })
     const local = modifierSection(planExemple(), LE_HEURT, { statut: 'relu' })
-    const r = await envoyerPlan(client, depot, 'main', { plan: local, shaPlanBase, message: 'x', forcer: false })
+    const r = await envoyer(client, depot, 'main', { plan: local, shaPlanBase, message: () => 'x', forcer: false })
     expect(r).toMatchObject({ type: 'conflit' })
     expect(faux.fichiers()['plan.json']).toBe(serialiserPlan(ailleurs))
   })
@@ -172,7 +172,7 @@ describe('envoyerPlan', () => {
     const { faux, depot, client, shaPlanBase } = await preparer()
     await faux.publier({ ...exemple, 'plan.json': serialiserPlan(deplacer(planExemple(), LEXIQUE, 0)) })
     const local = modifierSection(planExemple(), LE_HEURT, { statut: 'relu' })
-    const r = await envoyerPlan(client, depot, 'main', { plan: local, shaPlanBase, message: 'x', forcer: true })
+    const r = await envoyer(client, depot, 'main', { plan: local, shaPlanBase, message: () => 'x', forcer: true })
     expect(r.type).toBe('envoye')
     expect(faux.fichiers()['plan.json']).toBe(serialiserPlan(local))
   })
@@ -182,7 +182,7 @@ describe('envoyerPlan', () => {
     // Un autre appareil a modifié le texte du heurt (pas le plan).
     await faux.publier({ ...exemple, 'sections/le-heurt.md': 'Version de l’iPad.\n' })
     const local = modifierSection(planExemple(), LE_HEURT, { titre: 'Le choc' })
-    await envoyerPlan(client, depot, 'main', { plan: local, shaPlanBase, message: 'x', forcer: false })
+    await envoyer(client, depot, 'main', { plan: local, shaPlanBase, message: () => 'x', forcer: false })
     expect(faux.fichiers()['sections/le-choc.md']).toBe('Version de l’iPad.\n')
   })
 
@@ -190,7 +190,7 @@ describe('envoyerPlan', () => {
     const { faux, depot, client, shaPlanBase } = await preparer()
     faux.avantMiseAJourBranche = () => faux.publier({ ...exemple, 'README.md': 'Ajout\n' })
     const local = deplacer(planExemple(), LEXIQUE, 0)
-    const r = await envoyerPlan(client, depot, 'main', { plan: local, shaPlanBase, message: 'Plan : x', forcer: false })
+    const r = await envoyer(client, depot, 'main', { plan: local, shaPlanBase, message: () => 'Plan : x', forcer: false })
     expect(r.type).toBe('envoye')
     expect(faux.fichiers()['README.md']).toBe('Ajout\n')
     expect(faux.fichiers()['plan.json']).toBe(serialiserPlan(local))
@@ -203,5 +203,117 @@ describe('messageCommit', () => {
     expect(messageCommit(['déplacement de Le heurt'])).toBe('Plan : déplacement de Le heurt')
     expect(messageCommit(['a', 'b', 'a'])).toBe('Plan : a, b')
     expect(messageCommit(['a', 'b', 'c', 'd', 'e'])).toBe('Plan : a, b, c et 2 autres modifications')
+  })
+})
+
+describe('envoyer : textes', () => {
+  async function preparer() {
+    const faux = await FauxGitHub.creer(exemple)
+    const depot: Depot = { proprietaire: faux.proprietaire, nom: faux.nom }
+    const client = creerClient(faux.jetonValide, faux.enFetch())
+    const shaPlanBase = await shaBlobGit(exemple['plan.json'] ?? '')
+    const shaHeurt = await shaBlobGit(exemple['sections/le-heurt.md'] ?? '')
+    return { faux, depot, client, shaPlanBase, shaHeurt }
+  }
+
+  it('écrit un texte au chemin de sa section', async () => {
+    const { faux, depot, client, shaHeurt } = await preparer()
+    const r = await envoyer(client, depot, 'main', {
+      plan: null,
+      shaPlanBase: null,
+      forcer: false,
+      textes: [{ id: LE_HEURT, contenu: 'Nouveau texte.\n', shaBase: shaHeurt }],
+      message: () => 'Rédaction : Le heurt',
+    })
+    expect(r.type === 'envoye' && r.textes.get(LE_HEURT)).toEqual({ type: 'ecrit' })
+    expect(faux.fichiers()['sections/le-heurt.md']).toBe('Nouveau texte.\n')
+    expect(faux.fichiers()['plan.json']).toBe(exemple['plan.json'])
+    expect(faux.messages()[0]).toBe('Rédaction : Le heurt')
+  })
+
+  it('renommer et écrire dans le même commit : le texte arrive au nouveau chemin', async () => {
+    const { faux, depot, client, shaPlanBase, shaHeurt } = await preparer()
+    await envoyer(client, depot, 'main', {
+      plan: modifierSection(planExemple(), LE_HEURT, { titre: 'Le choc' }),
+      shaPlanBase,
+      forcer: false,
+      textes: [{ id: LE_HEURT, contenu: 'Texte du choc.\n', shaBase: shaHeurt }],
+      message: () => 'x',
+    })
+    const fichiers = faux.fichiers()
+    expect(fichiers['sections/le-choc.md']).toBe('Texte du choc.\n')
+    expect(fichiers['sections/le-heurt.md']).toBeUndefined()
+  })
+
+  it('écrit le texte d’une section créée dans le même envoi', async () => {
+    const { faux, depot, client, shaPlanBase } = await preparer()
+    const plan = creerSection(planExemple(), { type: 'texte', titre: 'Les dés', partie: 'regles', pages: 1 }, 3, 'zzz111')
+    await envoyer(client, depot, 'main', {
+      plan,
+      shaPlanBase,
+      forcer: false,
+      textes: [{ id: 'zzz111', contenu: 'Six faces.\n', shaBase: null }],
+      message: () => 'x',
+    })
+    expect(faux.fichiers()['sections/les-des.md']).toBe('Six faces.\n')
+  })
+
+  it('n’écrase jamais un texte modifié ailleurs : la version locale part dans conflits/', async () => {
+    const { faux, depot, client, shaHeurt } = await preparer()
+    await faux.publier({ ...exemple, 'sections/le-heurt.md': 'Version de l’iPad.\n' })
+    const r = await envoyer(client, depot, 'main', {
+      plan: null,
+      shaPlanBase: null,
+      forcer: false,
+      textes: [{ id: LE_HEURT, contenu: 'Version du Mac.\n', shaBase: shaHeurt }],
+      message: (conflits) => `conflits : ${conflits.join(',')}`,
+      maintenant: new Date(2026, 10, 25, 14, 32),
+    })
+    const fichiers = faux.fichiers()
+    expect(fichiers['sections/le-heurt.md']).toBe('Version de l’iPad.\n')
+    expect(fichiers['conflits/le-heurt-2026-11-25-1432.md']).toBe('Version du Mac.\n')
+    expect(r.type === 'envoye' && r.textes.get(LE_HEURT)).toMatchObject({
+      type: 'conflit',
+      chemin: 'conflits/le-heurt-2026-11-25-1432.md',
+    })
+    expect(faux.messages()[0]).toBe(`conflits : ${LE_HEURT}`)
+  })
+
+  it('« garder la mienne » écrit le texte et retire la sauvegarde', async () => {
+    const { faux, depot, client } = await preparer()
+    await faux.publier({ ...exemple, 'sections/le-heurt.md': 'iPad\n', 'conflits/le-heurt-x.md': 'Mac\n' })
+    const shaIpad = await shaBlobGit('iPad\n')
+    await envoyer(client, depot, 'main', {
+      plan: null,
+      shaPlanBase: null,
+      forcer: false,
+      textes: [{ id: LE_HEURT, contenu: 'Mac\n', shaBase: shaIpad, conflit: { chemin: 'conflits/le-heurt-x.md' } }],
+      message: () => 'x',
+    })
+    const fichiers = faux.fichiers()
+    expect(fichiers['sections/le-heurt.md']).toBe('Mac\n')
+    expect(fichiers['conflits/le-heurt-x.md']).toBeUndefined()
+  })
+
+  it('un texte identique à celui de GitHub ne crée pas de commit', async () => {
+    const { faux, depot, client, shaHeurt } = await preparer()
+    await envoyer(client, depot, 'main', {
+      plan: null,
+      shaPlanBase: null,
+      forcer: false,
+      textes: [{ id: LE_HEURT, contenu: exemple['sections/le-heurt.md'] ?? '', shaBase: shaHeurt }],
+      message: () => 'x',
+    })
+    expect(faux.messages()).toHaveLength(1)
+  })
+
+  it('message de commit pour la rédaction et le plan', () => {
+    expect(messageCommit([], ['Le heurt', 'Les serments'])).toBe('Rédaction : Le heurt, Les serments')
+    expect(messageCommit(['déplacement de Lexique'], ['Le heurt'])).toBe(
+      'Rédaction : Le heurt ; Plan : déplacement de Lexique',
+    )
+    expect(messageCommit([], [], ['Le heurt'])).toBe(
+      'Conflit : version de l’appareil sauvegardée dans conflits/ pour Le heurt',
+    )
   })
 })

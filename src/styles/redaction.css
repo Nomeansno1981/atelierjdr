@@ -1,0 +1,330 @@
+/* Atelier : mode rédaction (éditeur, liste des sections, recherche). */
+
+:root {
+  --texte-attenue: #a39d93;
+  --police-ecriture: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --colonne-sections: 280px;
+  --haut-barre: 56px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --texte-attenue: #77716a;
+  }
+}
+
+.mode-redaction {
+  min-height: 100dvh;
+}
+
+/* --- Liste des sections -------------------------------------------------- */
+
+.colonne-sections {
+  display: none;
+}
+
+.nav-sections {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-sections li > button,
+.nav-hors-texte {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--rayon);
+  background: transparent;
+  text-align: left;
+}
+
+.nav-hors-texte {
+  color: var(--texte-doux);
+  font-style: italic;
+}
+
+.nav-sections li.courante > button {
+  background: var(--fond);
+  font-weight: 650;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.nav-titre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-titre .icone {
+  display: inline;
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+.nav-jauge {
+  flex: none;
+  align-self: center;
+  width: 42px;
+  margin-top: 0;
+}
+
+/* La couleur appartient au statut (pastille) : la jauge reste neutre. */
+.nav-jauge .jauge-barre {
+  background: var(--bordure);
+}
+
+.nav-jauge .jauge-remplie {
+  background: var(--texte-doux);
+}
+
+.nav-jauge.jauge-depasse .jauge-remplie {
+  background: var(--erreur);
+}
+
+/* --- Barre fixe et en-tête de la section ------------------------------------ */
+
+.bouton-retour {
+  font-weight: 600;
+}
+
+.entete-section {
+  display: grid;
+  gap: 8px;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 16px max(16px, env(safe-area-inset-right)) 4px max(16px, env(safe-area-inset-left));
+}
+
+.champ-titre {
+  min-height: 48px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--police-ecriture);
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.champ-titre:hover,
+.champ-titre:focus {
+  border-bottom-color: var(--bordure);
+  outline: none;
+}
+
+.outils-redaction {
+  gap: 8px;
+}
+
+.outils-redaction select {
+  width: auto;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-color: var(--trait);
+  background: var(--remplissage);
+  font-size: 0.9rem;
+}
+
+.pages-redaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.compteur-mots {
+  min-width: 140px;
+  font-size: 0.85rem;
+}
+
+.compteur-mots .jauge-barre {
+  background: var(--bordure);
+}
+
+.compteur-mots .jauge-remplie {
+  background: var(--texte-doux);
+}
+
+/* --- Éditeur ------------------------------------------------------------------- */
+
+.zone-texte {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 8px max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+}
+
+.editeur .cm-editor {
+  background: transparent;
+  color: var(--texte);
+  font-family: var(--police-ecriture);
+  font-size: 1.15rem;
+  line-height: 1.65;
+}
+
+.editeur .cm-editor.cm-focused {
+  outline: none;
+}
+
+/* La page défile, pas l'éditeur : Safari garde ainsi la ligne en cours au-dessus du clavier. */
+.editeur .cm-scroller {
+  overflow: visible;
+  font-family: inherit;
+  line-height: inherit;
+}
+
+.editeur .cm-content {
+  min-height: 50vh;
+  padding: 8px 0 45vh;
+  caret-color: var(--accent);
+}
+
+.editeur .cm-line {
+  padding: 0;
+}
+
+.editeur .cm-placeholder {
+  color: var(--texte-attenue);
+  font-style: italic;
+}
+
+.editeur .cm-titre-reserve {
+  text-decoration: underline wavy var(--erreur);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.editeur .cm-selectionMatch {
+  background: var(--attention-fond);
+}
+
+/* Panneau de recherche de CodeMirror : sous la barre fixe. */
+.editeur .cm-panels {
+  background: var(--surface);
+  color: var(--texte);
+  border-color: var(--bordure);
+}
+
+.editeur .cm-panels-top {
+  top: var(--haut-barre);
+  border-bottom: 1px solid var(--bordure);
+}
+
+.editeur .cm-search {
+  font-family: var(--police-texte);
+  font-size: 0.85rem;
+}
+
+.editeur .cm-search input,
+.editeur .cm-search button {
+  width: auto;
+  min-height: 32px;
+  font-size: 16px;
+}
+
+.pied-texte {
+  padding: 0 0 32px;
+  font-size: 0.8rem;
+  color: var(--texte-doux);
+}
+
+.pied-texte a {
+  color: inherit;
+}
+
+/* --- Recherche dans le manuscrit -------------------------------------------- */
+
+.recherche {
+  display: grid;
+  gap: 8px;
+}
+
+.resultats {
+  display: grid;
+  gap: 12px;
+}
+
+.resultats h3 {
+  margin: 4px 0;
+  font-size: 0.95rem;
+}
+
+.resultats ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.resultats button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--bordure);
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--police-ecriture);
+  text-align: left;
+}
+
+.resultats mark {
+  background: var(--statut-premier-jet);
+  color: inherit;
+}
+
+/* --- Concentration ------------------------------------------------------------- */
+
+.concentration :is(.colonne-sections, .barre-redaction, .entete-section, .pied-texte) {
+  display: none;
+}
+
+.sortie-concentration {
+  position: fixed;
+  z-index: 30;
+  top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  font-size: 0.8rem;
+  opacity: 0.5;
+}
+
+.sortie-concentration:hover,
+.sortie-concentration:focus-visible {
+  opacity: 1;
+}
+
+/* --- Ordinateur : colonne de navigation ---------------------------------------- */
+
+@media (min-width: 1024px) {
+  .mode-redaction:not(.concentration) {
+    display: grid;
+    grid-template-columns: var(--colonne-sections) minmax(0, 1fr);
+  }
+
+  .colonne-sections {
+    position: sticky;
+    top: 0;
+    display: block;
+    height: 100dvh;
+    overflow-y: auto;
+    padding: 12px 8px;
+    border-right: 1px solid var(--bordure);
+    background: var(--surface);
+  }
+
+  .bouton-tiroir {
+    display: none;
+  }
+}
+
+.barre-redaction button {
+  white-space: nowrap;
+}

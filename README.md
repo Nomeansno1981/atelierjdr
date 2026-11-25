@@ -2,7 +2,7 @@
 
 Outil personnel pour planifier et rédiger le manuel de *Katastrophê* : un chemin de fer (le plan du livre, page par page) et un éditeur Markdown. Le site est statique, hébergé sur GitHub Pages ; le manuscrit vit dans un dépôt GitHub privé, en fichiers Markdown lisibles sans l’Atelier.
 
-> **État : jalon 2 (mode plan).** Le chemin de fer est en place : grille en doubles pages, pagination, post-its, glisser-déposer, création, modification, corbeille, annulation. Les modifications du plan sont enregistrées sur l’appareil puis envoyées à GitHub. L’éditeur de texte arrive au jalon 3.
+> **État : jalon 3 (mode rédaction).** Le plan (chemin de fer) et l’éditeur Markdown sont en place. Tout est enregistré sur l’appareil, puis envoyé à GitHub. La typographie automatique arrive au jalon 4.
 
 ## Les deux dépôts
 
@@ -81,7 +81,19 @@ Le plan est un chemin de fer : chaque section est un post-it qui couvre autant d
 - **Enregistrement** : chaque modification est écrite sur l’appareil immédiatement, puis envoyée à GitHub environ 5 secondes après la dernière, en un seul commit. L’indicateur en haut à droite dit où elle en est.
 - **Conflit** : si le plan a été modifié sur un autre appareil pendant que vous travailliez, un bandeau vous laisse choisir la version à garder. L’autre reste dans l’historique GitHub.
 
-En attendant l’éditeur (jalon 3), toucher une section de texte ouvre son panneau de modification.
+Toucher une section de texte ouvre l’éditeur ; toucher un hors-texte ouvre son panneau.
+
+## Écrire
+
+L’éditeur montre le Markdown brut, avec un léger rendu : intertitres plus grands, gras et italique visibles, signes de syntaxe atténués. Le correcteur orthographique du navigateur est réglé sur le français.
+
+- **En haut** : retour au plan, liste des sections (colonne à gauche sur ordinateur, bouton « Sections » sur tablette et téléphone), état de l’enregistrement.
+- **Sous le titre** : statut, pages, compteur « mots / cible » en direct, sections précédente et suivante, recherche, mode concentration.
+- **Intertitres** : commencez à `###`. Les titres `#` et `##` sont réservés à la compilation ; l’éditeur les souligne en rouge.
+- **Raccourcis** : Cmd/Ctrl+B gras, Cmd/Ctrl+I italique, Cmd/Ctrl+S envoyer tout de suite, Cmd/Ctrl+F chercher dans la section, Cmd/Ctrl+Maj+F chercher dans tout le manuscrit (sans tenir compte des majuscules ni des accents).
+- **Enregistrement** : le texte est écrit sur l’appareil moins d’une seconde après la frappe, puis envoyé à GitHub après 30 secondes sans frappe, en quittant la section, en revenant au plan, sur Cmd/Ctrl+S, ou quand l’onglet passe en arrière-plan. Un réseau coupé ou un onglet fermé ne fait rien perdre : tout part au retour du réseau.
+- **Conflit** : si la même section a été modifiée sur un autre appareil, rien n’est écrasé. La version de cet appareil est sauvegardée dans `conflits/` du dépôt, celle de GitHub reste en place, et un bandeau vous laisse choisir laquelle garder.
+- **Historique** : un lien sous le texte ouvre l’historique de la section sur GitHub.
 
 ## Installer sur iPhone et iPad
 

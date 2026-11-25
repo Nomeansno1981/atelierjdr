@@ -2,12 +2,13 @@
  * État global de l'application et enchaînement connexion → cache → synchro.
  * Indépendant de React : l'interface s'y abonne par useSyncExternalStore.
  *
- * Toute modification du plan est d'abord écrite sur l'appareil (brouillon
- * dans IndexedDB), puis envoyée à GitHub environ 5 secondes après la
- * dernière opération, en un seul commit.
+ * Toute modification est d'abord écrite sur l'appareil (IndexedDB), puis
+ * envoyée à GitHub en un seul commit : environ 5 s après la dernière
+ * opération du plan, 30 s après la dernière frappe, ou tout de suite sur
+ * demande (Cmd+S, changement de section, onglet en arrière-plan).
  */
 
-import { ErreurPlan, lirePlan, serialiserPlan, type Plan } from '../domaine/plan'
+import { ErreurPlan, lirePlan, serialiserPlan, toutesLesSections, type Plan } from '../domaine/plan'
 import {
   creerClient,
   ErreurGitHub,
@@ -16,7 +17,7 @@ import {
   type ClientGitHub,
   type Depot,
 } from '../github/client'
-import { envoyerPlan, messageCommit } from '../github/ecriture'
+import { envoyer, messageCommit, type TexteAEnvoyer } from '../github/ecriture'
 import { shaBlobGit } from '../github/empreinte'
 import { lireInfosDepot, lireTete } from '../github/lecture'
 import { CHEMIN_PLAN, synchroniser } from '../github/synchro'
@@ -25,11 +26,17 @@ import {
   demanderStockagePersistant,
   NOM_BASE,
   type BrouillonPlan,
+  type BrouillonTexte,
   type Connexion,
+  type FichierCache,
 } from '../stockage/cache'
 
 /** Délai entre la dernière opération du plan et l'envoi groupé. */
 export const DELAI_ENVOI_PLAN_MS = 5_000
+/** Délai entre la dernière frappe et l'envoi du texte. */
+export const DELAI_ENVOI_TEXTE_MS = 30_000
+/** Délai maximal entre une frappe et son écriture sur l'appareil. */
+const DELAI_ECRITURE_LOCALE_MS = 300
 /** Nouvel essai d'envoi après une coupure ou une erreur. */
 const DELAI_NOUVEL_ESSAI_MS = 30_000
 const NIVEAUX_ANNULATION = 50
@@ -48,8 +55,14 @@ export interface Manuscrit {
   plan: Plan | null
   /** Pourquoi le plan n'a pas pu être lu, le cas échéant. */
   erreurPlan: string | null
-  /** Chemin → contenu, pour chaque fichier .md en cache. */
+  /** Texte de chaque section de texte, par identifiant (modifications locales comprises). */
   textes: ReadonlyMap<string, string>
+  /** Texte de chaque section tel qu'il est sur GitHub (dernière synchronisation). */
+  textesDistants: ReadonlyMap<string, string>
+  /** Sections dont le texte a des modifications pas encore envoyées. */
+  textesModifies: ReadonlySet<string>
+  /** Sections en conflit : chemin de la sauvegarde de la version locale. */
+  conflitsTexte: ReadonlyMap<string, string>
 }
 
 export interface ConnexionActive extends Connexion {
@@ -62,7 +75,7 @@ export interface EtatOuvert {
   /** null tant que rien n'a jamais été synchronisé sur cet appareil. */
   manuscrit: Manuscrit | null
   synchro: EtatSynchro
-  /** Nombre d'opérations pas encore envoyées. */
+  /** Nombre de modifications pas encore envoyées (opérations du plan et textes). */
   enAttente: number
   /** Plan trouvé sur GitHub quand il a changé ailleurs pendant nos modifications. */
   conflit: Plan | null
@@ -81,13 +94,15 @@ export interface OptionsAtelier {
   fetch?: typeof fetch
   nomBase?: string
   delaiEnvoiMs?: number
+  delaiEnvoiTexteMs?: number
 }
 
 interface DonneesCache {
   plan: Plan | null
   shaPlan: string | null
   erreurPlan: string | null
-  textes: ReadonlyMap<string, string>
+  /** Fichiers .md en cache, par chemin. */
+  fichiers: ReadonlyMap<string, FichierCache>
 }
 
 interface EntreeHistorique {
@@ -95,6 +110,8 @@ interface EntreeHistorique {
   apres: Plan
   description: string
 }
+
+type Minuterie = 'plan' | 'texte' | 'essai' | 'ecriture'
 
 export class Atelier {
   private etat: EtatAtelier = { phase: 'demarrage' }
@@ -104,12 +121,15 @@ export class Atelier {
 
   private donnees: DonneesCache | null = null
   private brouillon: BrouillonPlan | null = null
+  private readonly brouillonsTexte = new Map<string, BrouillonTexte>()
+  /** Textes modifiés en mémoire, pas encore écrits dans IndexedDB. */
+  private readonly ecrituresEnAttente = new Set<string>()
   private conflit: Plan | null = null
   private forcerProchainEnvoi = false
   private annulations: EntreeHistorique[] = []
   private retablissements: EntreeHistorique[] = []
 
-  private minuterie: ReturnType<typeof setTimeout> | null = null
+  private readonly minuteries = new Map<Minuterie, ReturnType<typeof setTimeout>>()
   private cycleEnCours: Promise<void> | null = null
   private cycleSuivant: Promise<void> | null = null
 
@@ -136,19 +156,48 @@ export class Atelier {
       ...this.etat,
       manuscrit: this.manuscrit(),
       synchro: synchro ?? this.etat.synchro,
-      enAttente: this.brouillon?.descriptions.length ?? 0,
+      enAttente: (this.brouillon?.descriptions.length ?? 0) + this.brouillonsTexte.size,
       conflit: this.conflit,
       annulable: this.annulations.at(-1)?.description ?? null,
       retablissable: this.retablissements.at(-1)?.description ?? null,
     })
   }
 
+  private aDesModifications(): boolean {
+    return this.brouillon !== null || this.brouillonsTexte.size > 0
+  }
+
+  /** Fichier de GitHub (en cache) qui porte le texte d'une section. */
+  private base(id: string, cheminLocal?: string): FichierCache | undefined {
+    const donnees = this.donnees
+    if (!donnees) return undefined
+    const distante = donnees.plan && toutesLesSections(donnees.plan).find((s) => s.id === id)
+    const chemin = distante?.type === 'texte' ? distante.fichier : cheminLocal
+    return chemin === undefined ? undefined : donnees.fichiers.get(chemin)
+  }
+
   private manuscrit(): Manuscrit | null {
     if (!this.donnees) return null
+    const plan = this.brouillon?.plan ?? this.donnees.plan
+    const textes = new Map<string, string>()
+    const textesDistants = new Map<string, string>()
+    const conflitsTexte = new Map<string, string>()
+    if (plan) {
+      for (const s of toutesLesSections(plan)) {
+        if (s.type !== 'texte') continue
+        const distant = this.base(s.id, s.fichier)?.contenu ?? ''
+        textesDistants.set(s.id, distant)
+        textes.set(s.id, this.brouillonsTexte.get(s.id)?.contenu ?? distant)
+      }
+    }
+    for (const b of this.brouillonsTexte.values()) if (b.conflit) conflitsTexte.set(b.id, b.conflit.chemin)
     return {
-      plan: this.brouillon?.plan ?? this.donnees.plan,
+      plan,
       erreurPlan: this.brouillon ? null : this.donnees.erreurPlan,
-      textes: this.donnees.textes,
+      textes,
+      textesDistants,
+      textesModifies: new Set(this.brouillonsTexte.keys()),
+      conflitsTexte,
     }
   }
 
@@ -174,8 +223,8 @@ export class Atelier {
   }
 
   /**
-   * Synchronise au retour au premier plan et au retour du réseau ; envoie
-   * ce qui est en attente quand l'onglet passe en arrière-plan.
+   * Synchronise au retour au premier plan et au retour du réseau ; écrit et
+   * envoie ce qui est en attente quand l'onglet passe en arrière-plan.
    */
   ecouterNavigateur(): () => void {
     const visibilite = () => {
@@ -183,11 +232,14 @@ export class Atelier {
       else void this.envoyerMaintenant()
     }
     const enLigne = () => void this.synchroniser()
+    const fermeture = () => void this.ecrireTextes()
     document.addEventListener('visibilitychange', visibilite)
     window.addEventListener('online', enLigne)
+    window.addEventListener('pagehide', fermeture)
     return () => {
       document.removeEventListener('visibilitychange', visibilite)
       window.removeEventListener('online', enLigne)
+      window.removeEventListener('pagehide', fermeture)
     }
   }
 
@@ -227,11 +279,13 @@ export class Atelier {
 
   async seDeconnecter(): Promise<void> {
     if (!this.cache) return
-    this.arreterMinuterie()
+    this.arreterMinuteries()
     await this.cache.toutEffacer()
     this.client = null
     this.donnees = null
     this.brouillon = null
+    this.brouillonsTexte.clear()
+    this.ecrituresEnAttente.clear()
     this.conflit = null
     this.annulations = []
     this.retablissements = []
@@ -243,6 +297,8 @@ export class Atelier {
     if (!cache) return
     this.client = creerClient(connexion.jeton, this.options.fetch)
     this.brouillon = await cache.lireBrouillon()
+    this.brouillonsTexte.clear()
+    for (const [id, b] of await cache.lireBrouillonsTexte()) this.brouillonsTexte.set(id, b)
     this.donnees = await this.lireDonnees()
     this.changer({
       phase: 'atelier',
@@ -313,8 +369,9 @@ export class Atelier {
     ) {
       // Retour exact au plan de GitHub (par annulation) : plus rien à envoyer.
       this.brouillon = null
-      this.arreterMinuterie()
-      this.publier(this.etat.phase === 'atelier' && this.etat.synchro.etat === 'local' ? { etat: 'a-jour', le: new Date().toISOString() } : undefined)
+      this.arreter('plan')
+      const etaitLocal = this.etat.phase === 'atelier' && this.etat.synchro.etat === 'local'
+      this.publier(etaitLocal && !this.aDesModifications() ? { etat: 'a-jour', le: new Date().toISOString() } : undefined)
       await cache.effacerBrouillon()
       return
     }
@@ -327,18 +384,13 @@ export class Atelier {
       revision: (precedent?.revision ?? 0) + 1,
       modifieLe: new Date().toISOString(),
     }
-    const enCours = this.etat.phase === 'atelier' && ['envoi', 'en-cours'].includes(this.etat.synchro.etat)
-    this.publier(enCours ? undefined : { etat: 'local' })
+    this.publier(this.envoiEnCours() ? undefined : { etat: 'local' })
     try {
       await cache.enregistrerBrouillon(this.brouillon)
     } catch {
-      this.publier({
-        etat: 'erreur',
-        message: 'Impossible d’enregistrer sur cet appareil : la modification n’est pas encore protégée.',
-        le: null,
-      })
+      this.signalerEchecLocal()
     }
-    this.programmerEnvoi(this.options.delaiEnvoiMs ?? DELAI_ENVOI_PLAN_MS)
+    this.programmer('plan', this.options.delaiEnvoiMs ?? DELAI_ENVOI_PLAN_MS)
   }
 
   /** Choix de l'utilisateur après un conflit sur le plan. */
@@ -357,32 +409,132 @@ export class Atelier {
     return this.synchroniser()
   }
 
-  /** Envoie tout de suite ce qui est en attente (onglet en arrière-plan, Cmd+S). */
-  envoyerMaintenant(): Promise<void> {
-    if (!this.brouillon) return Promise.resolve()
-    this.arreterMinuterie()
-    return this.synchroniser()
+  // --- Textes ---------------------------------------------------------------
+
+  /**
+   * Enregistre le texte d'une section. Appelée à chaque frappe : le texte
+   * est écrit sur l'appareil en moins d'une seconde et envoyé 30 s après la
+   * dernière frappe.
+   */
+  modifierTexte(id: string, contenu: string): void {
+    const plan = this.manuscrit()?.plan
+    const section = plan && toutesLesSections(plan).find((s) => s.id === id)
+    if (section?.type !== 'texte') return
+    const precedent = this.brouillonsTexte.get(id)
+    if (precedent?.contenu === contenu) return
+    const base = this.base(id, section.fichier)
+    if (!precedent && contenu === (base?.contenu ?? '')) return
+
+    if (precedent && !precedent.conflit && contenu === (base?.contenu ?? '')) {
+      // Retour exact au texte de GitHub : plus rien à envoyer pour lui.
+      this.brouillonsTexte.delete(id)
+    } else {
+      this.brouillonsTexte.set(id, {
+        id,
+        contenu,
+        shaBase: precedent ? precedent.shaBase : (base?.sha ?? null),
+        revision: (precedent?.revision ?? 0) + 1,
+        modifieLe: new Date().toISOString(),
+        ...(precedent?.conflit ? { conflit: precedent.conflit } : {}),
+      })
+    }
+    this.ecrituresEnAttente.add(id)
+    if (!this.minuteries.has('ecriture')) {
+      this.programmer('ecriture', DELAI_ECRITURE_LOCALE_MS, () => void this.ecrireTextes())
+    }
+    this.programmer('texte', this.options.delaiEnvoiTexteMs ?? DELAI_ENVOI_TEXTE_MS)
   }
 
-  private programmerEnvoi(delai: number): void {
-    this.arreterMinuterie()
-    this.minuterie = setTimeout(() => {
-      this.minuterie = null
-      void this.synchroniser()
-    }, delai)
+  /** Écrit dans IndexedDB les textes modifiés en mémoire. */
+  private async ecrireTextes(): Promise<void> {
+    this.arreter('ecriture')
+    const cache = this.cache
+    if (!cache || this.ecrituresEnAttente.size === 0) return
+    const ids = [...this.ecrituresEnAttente]
+    this.ecrituresEnAttente.clear()
+    try {
+      await Promise.all(
+        ids.map((id) => {
+          const b = this.brouillonsTexte.get(id)
+          return b ? cache.enregistrerBrouillonTexte(b) : cache.effacerBrouillonTexte(id)
+        }),
+      )
+    } catch {
+      for (const id of ids) this.ecrituresEnAttente.add(id)
+      this.signalerEchecLocal()
+      return
+    }
+    if (this.envoiEnCours()) this.publier()
+    else if (this.aDesModifications()) this.publier({ etat: 'local' })
+    else this.publier({ etat: 'a-jour', le: new Date().toISOString() })
   }
 
-  private arreterMinuterie(): void {
-    if (this.minuterie !== null) clearTimeout(this.minuterie)
-    this.minuterie = null
+  /** Choix de l'utilisateur après un conflit sur un texte. */
+  async resoudreConflitTexte(id: string, choix: 'local' | 'distant'): Promise<void> {
+    const b = this.brouillonsTexte.get(id)
+    if (!b?.conflit) return
+    if (choix === 'local') {
+      // Le texte de l'appareil remplacera celui de GitHub (qui reste dans
+      // l'historique) ; la sauvegarde dans conflits/ sera retirée.
+      this.brouillonsTexte.set(id, { ...b, shaBase: b.conflit.shaDistant, revision: b.revision + 1 })
+    } else {
+      // On reprend le texte de GitHub. La sauvegarde reste dans conflits/.
+      this.brouillonsTexte.delete(id)
+    }
+    this.ecrituresEnAttente.add(id)
+    await this.ecrireTextes()
+    await this.synchroniser()
+  }
+
+  /** Écrit et envoie tout de suite ce qui est en attente (Cmd+S, changement de section…). */
+  async envoyerMaintenant(): Promise<void> {
+    await this.ecrireTextes()
+    if (!this.aDesModifications()) return
+    this.arreter('plan')
+    this.arreter('texte')
+    await this.synchroniser()
+  }
+
+  private envoiEnCours(): boolean {
+    return this.etat.phase === 'atelier' && ['envoi', 'en-cours'].includes(this.etat.synchro.etat)
+  }
+
+  private signalerEchecLocal(): void {
+    this.publier({
+      etat: 'erreur',
+      message: 'Impossible d’enregistrer sur cet appareil : la modification n’est pas encore protégée.',
+      le: null,
+    })
+  }
+
+  private programmer(type: Minuterie, delai: number, action: () => void = () => void this.synchroniser()): void {
+    this.arreter(type)
+    this.minuteries.set(
+      type,
+      setTimeout(() => {
+        this.minuteries.delete(type)
+        action()
+      }, delai),
+    )
+  }
+
+  private arreter(type: Minuterie): void {
+    const m = this.minuteries.get(type)
+    if (m !== undefined) clearTimeout(m)
+    this.minuteries.delete(type)
+  }
+
+  private arreterMinuteries(): void {
+    for (const m of this.minuteries.values()) clearTimeout(m)
+    this.minuteries.clear()
   }
 
   // --- Synchronisation ------------------------------------------------------
 
   /**
-   * Envoie le brouillon s'il y en a un, puis met le cache à jour. Si un cycle
-   * est en cours, en programme un seul de plus à sa suite : la promesse
-   * renvoyée se résout quand un cycle commencé après l'appel est terminé.
+   * Envoie ce qui est en attente, puis met le cache à jour. Si un cycle est
+   * en cours, en programme un seul de plus à sa suite : la promesse renvoyée
+   * se résout quand un cycle commencé après l'appel est terminé.
    */
   synchroniser(): Promise<void> {
     const enCours = this.cycleEnCours
@@ -415,10 +567,15 @@ export class Atelier {
 
     try {
       let contenusConnus: string[] = []
-      if (this.brouillon && !this.conflit) {
-        this.arreterMinuterie()
+      // Tant qu'un conflit sur le plan n'est pas réglé, rien ne part :
+      // les chemins des textes dépendent du plan.
+      if (this.aDesModifications() && !this.conflit) {
+        await this.ecrireTextes()
+        this.arreter('plan')
+        this.arreter('texte')
+        this.arreter('essai')
         this.publier({ etat: 'envoi' })
-        contenusConnus = await this.envoyerBrouillon(client, connexion, cache)
+        contenusConnus = await this.envoyerModifications(client, connexion, cache)
         if (!toujoursActif()) return
       }
       this.publier({ etat: 'en-cours' })
@@ -434,15 +591,16 @@ export class Atelier {
       }
       this.donnees = donnees
       this.publier(
-        this.brouillon ? { etat: 'local' } : { etat: 'a-jour', le: base?.le ?? new Date().toISOString() },
+        this.aDesModifications() ? { etat: 'local' } : { etat: 'a-jour', le: base?.le ?? new Date().toISOString() },
       )
     } catch (e) {
       if (!toujoursActif()) return
       const le = (await cache.lireBase())?.le ?? null
       if (this.etat.phase !== 'atelier') return
       if (e instanceof ErreurGitHub && e.nature === 'jeton') {
-        // Le dépôt, le cache et le brouillon sont gardés : seul le jeton est à ressaisir.
-        this.arreterMinuterie()
+        // Le dépôt, le cache et les brouillons sont gardés : seul le jeton est à ressaisir.
+        this.arreterMinuteries()
+        await this.ecrireTextes()
         await cache.enregistrerConnexion({ ...connexion, jeton: null })
         this.client = null
         this.changer({
@@ -453,7 +611,7 @@ export class Atelier {
         })
         return
       }
-      if (this.brouillon) this.programmerEnvoi(DELAI_NOUVEL_ESSAI_MS)
+      if (this.aDesModifications()) this.programmer('essai', DELAI_NOUVEL_ESSAI_MS)
       if (e instanceof ErreurGitHub && e.nature === 'reseau') {
         this.publier({ etat: 'hors-ligne', le })
       } else {
@@ -462,16 +620,31 @@ export class Atelier {
     }
   }
 
-  /** Envoie le brouillon. Renvoie les contenus envoyés, connus sans téléchargement. */
-  private async envoyerBrouillon(client: ClientGitHub, connexion: ConnexionActive, cache: Cache): Promise<string[]> {
-    const envoye = this.brouillon
-    if (!envoye) return []
-    const resultat = await envoyerPlan(client, connexion.depot, connexion.branche, {
-      plan: envoye.plan,
-      shaPlanBase: envoye.shaPlanBase,
-      message: messageCommit(envoye.descriptions),
+  /** Envoie le plan et les textes en un commit. Renvoie les contenus envoyés. */
+  private async envoyerModifications(client: ClientGitHub, connexion: ConnexionActive, cache: Cache): Promise<string[]> {
+    const planEnvoye = this.brouillon
+    const textesEnvoyes = [...this.brouillonsTexte.values()]
+    const planLocal = this.manuscrit()?.plan
+    const titre = (id: string) => (planLocal && toutesLesSections(planLocal).find((s) => s.id === id)?.titre) ?? id
+
+    const textes: TexteAEnvoyer[] = textesEnvoyes.map((b) => ({
+      id: b.id,
+      contenu: b.contenu,
+      shaBase: b.shaBase,
+      conflit: b.conflit,
+    }))
+    const resultat = await envoyer(client, connexion.depot, connexion.branche, {
+      plan: planEnvoye?.plan ?? null,
+      shaPlanBase: planEnvoye?.shaPlanBase ?? null,
       forcer: this.forcerProchainEnvoi,
-      aSupprimer: envoye.aSupprimer ?? [],
+      aSupprimer: planEnvoye?.aSupprimer ?? [],
+      textes,
+      message: (conflits) =>
+        messageCommit(
+          planEnvoye?.descriptions ?? [],
+          textesEnvoyes.filter((b) => !conflits.includes(b.id)).map((b) => titre(b.id)),
+          conflits.map(titre),
+        ),
     })
     this.forcerProchainEnvoi = false
     if (resultat.type === 'conflit') {
@@ -481,52 +654,70 @@ export class Atelier {
 
     // Le plan envoyé devient la nouvelle référence, avant même la
     // synchronisation : une opération faite entre-temps partira de lui.
-    const shaEnvoye = await shaBlobGit(resultat.contenuPlan)
-    this.donnees = this.donnees && { ...this.donnees, plan: resultat.plan, shaPlan: shaEnvoye, erreurPlan: null }
+    const shaPlan = await shaBlobGit(resultat.contenuPlan)
+    if (this.donnees) this.donnees = { ...this.donnees, plan: resultat.plan, shaPlan, erreurPlan: null }
 
-    const actuel = this.brouillon
-    if (actuel?.revision === envoye.revision) {
-      this.brouillon = null
-      await cache.effacerBrouillon()
-    } else if (actuel) {
-      // Des opérations ont eu lieu pendant l'envoi : elles partiront au prochain.
-      this.brouillon = {
-        ...actuel,
-        shaPlanBase: shaEnvoye,
-        descriptions: actuel.descriptions.slice(envoye.descriptions.length),
-        aSupprimer: (actuel.aSupprimer ?? []).slice((envoye.aSupprimer ?? []).length),
+    if (planEnvoye) {
+      const actuel = this.brouillon
+      if (actuel?.revision === planEnvoye.revision) {
+        this.brouillon = null
+        await cache.effacerBrouillon()
+      } else if (actuel) {
+        // Des opérations ont eu lieu pendant l'envoi : elles partiront au prochain.
+        this.brouillon = {
+          ...actuel,
+          shaPlanBase: shaPlan,
+          descriptions: actuel.descriptions.slice(planEnvoye.descriptions.length),
+          aSupprimer: (actuel.aSupprimer ?? []).slice((planEnvoye.aSupprimer ?? []).length),
+        }
+        await cache.enregistrerBrouillon(this.brouillon)
+        this.programmer('plan', this.options.delaiEnvoiMs ?? DELAI_ENVOI_PLAN_MS)
       }
-      await cache.enregistrerBrouillon(this.brouillon)
-      this.programmerEnvoi(this.options.delaiEnvoiMs ?? DELAI_ENVOI_PLAN_MS)
     }
-    return [resultat.contenuPlan, '']
+
+    for (const envoye of textesEnvoyes) {
+      const r = resultat.textes.get(envoye.id)
+      const actuel = this.brouillonsTexte.get(envoye.id)
+      if (!r || !actuel) continue
+      if (r.type === 'conflit') {
+        const marque: BrouillonTexte = { ...actuel, conflit: { chemin: r.chemin, shaDistant: r.shaDistant } }
+        this.brouillonsTexte.set(envoye.id, marque)
+        await cache.enregistrerBrouillonTexte(marque)
+      } else if (actuel.revision === envoye.revision) {
+        this.brouillonsTexte.delete(envoye.id)
+        await cache.effacerBrouillonTexte(envoye.id)
+      } else {
+        // Frappes pendant l'envoi : elles partiront au prochain, depuis ce qui vient d'être écrit.
+        const suite: BrouillonTexte = { ...actuel, shaBase: await shaBlobGit(envoye.contenu) }
+        delete suite.conflit
+        this.brouillonsTexte.set(envoye.id, suite)
+        await cache.enregistrerBrouillonTexte(suite)
+        this.programmer('texte', this.options.delaiEnvoiTexteMs ?? DELAI_ENVOI_TEXTE_MS)
+      }
+    }
+    return resultat.contenus
   }
 
   /** Lit le manuscrit en cache ; null si rien n'a jamais été synchronisé. */
   private async lireDonnees(): Promise<DonneesCache | null> {
     const cache = this.cache
     if (!cache) return null
-    const [fichiers, base] = await Promise.all([cache.lireFichiers(), cache.lireBase()])
+    const [tous, base] = await Promise.all([cache.lireFichiers(), cache.lireBase()])
     if (!base) return null
-    const vide: DonneesCache = { plan: null, shaPlan: null, erreurPlan: null, textes: new Map() }
-
-    const textes = new Map<string, string>()
-    for (const f of fichiers.values()) {
-      if (f.chemin.endsWith('.md')) textes.set(f.chemin, f.contenu)
-    }
-    const fichierPlan = fichiers.get(CHEMIN_PLAN)
+    const fichiers = new Map([...tous].filter(([chemin]) => chemin.endsWith('.md')))
+    const vide: DonneesCache = { plan: null, shaPlan: null, erreurPlan: null, fichiers }
+    const fichierPlan = tous.get(CHEMIN_PLAN)
     if (!fichierPlan) {
       return {
         ...vide,
-        textes,
         erreurPlan:
           'Le dépôt ne contient pas de plan.json. Copiez-y le manuscrit d’exemple (voir la documentation).',
       }
     }
     try {
-      return { plan: lirePlan(fichierPlan.contenu), shaPlan: fichierPlan.sha, erreurPlan: null, textes }
+      return { ...vide, plan: lirePlan(fichierPlan.contenu), shaPlan: fichierPlan.sha }
     } catch (e) {
-      return { ...vide, textes, shaPlan: fichierPlan.sha, erreurPlan: messageErreur(e) }
+      return { ...vide, shaPlan: fichierPlan.sha, erreurPlan: messageErreur(e) }
     }
   }
 }

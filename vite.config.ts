@@ -1,6 +1,16 @@
+import { randomBytes } from 'node:crypto'
 import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
 import { defineConfig } from 'vitest/config'
+
+/**
+ * Jeton des styles de l'éditeur. CodeMirror injecte ses styles dans une
+ * balise <style> : seule celle qui porte ce jeton est acceptée, les autres
+ * styles en ligne (attributs style="…" compris) restent bloqués. Tiré au
+ * hasard à chaque construction ; il ne peut pas changer à chaque chargement
+ * sans serveur.
+ */
+const NONCE_STYLES = randomBytes(18).toString('base64')
 
 /**
  * Politique de sécurité du contenu. GitHub Pages ne permet pas d'envoyer
@@ -11,7 +21,7 @@ import { defineConfig } from 'vitest/config'
 const CSP = [
   "default-src 'none'",
   "script-src 'self'",
-  "style-src 'self'",
+  `style-src 'self' 'nonce-${NONCE_STYLES}'`,
   "img-src 'self' data:",
   "font-src 'self'",
   'connect-src https://api.github.com',
@@ -39,6 +49,9 @@ export default defineConfig({
   // GitHub Pages (https://utilisateur.github.io/atelier/).
   base: './',
   plugins: [react(), politiqueDeSecurite()],
+  define: {
+    __NONCE_STYLES__: JSON.stringify(NONCE_STYLES),
+  },
   build: {
     // Aucune ressource en data: dans le CSS ou le JS : tout reste en fichiers.
     assetsInlineLimit: 0,

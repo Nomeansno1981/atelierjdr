@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it, vi } from 'vitest'
-import { changerPages, creerSection, deplacer, supprimerSection } from '../domaine/operations'
+import { changerPages, creerSection, deplacer, modifierSection, supprimerSection } from '../domaine/operations'
 import { lirePlan, serialiserPlan } from '../domaine/plan'
 import { lireExemple } from '../test/exemple'
 import { FauxGitHub } from '../test/fauxGitHub'
@@ -52,7 +52,7 @@ describe('Atelier', () => {
     const etat = enAtelier(atelier.lire())
     expect(etat.synchro.etat).toBe('a-jour')
     expect(etat.manuscrit?.plan?.sections).toHaveLength(10)
-    expect(etat.manuscrit?.textes.get('sections/le-heurt.md')).toBe(lireExemple()['sections/le-heurt.md'])
+    expect(etat.manuscrit?.textes.get('k7f3qa')).toBe(lireExemple()['sections/le-heurt.md'])
   })
 
   it('rouvre sur le cache, hors ligne, sans redemander le jeton', async () => {
@@ -274,7 +274,7 @@ describe('Atelier : opérations du plan', () => {
     faux.oublierRequetes()
     await atelier.envoyerMaintenant()
     expect(faux.fichiers()['sections/les-des.md']).toBe('')
-    expect(enAtelier(atelier.lire()).manuscrit?.textes.get('sections/les-des.md')).toBe('')
+    expect(enAtelier(atelier.lire()).manuscrit?.textes.get('zzz111')).toBe('')
     // Seul le plan distant est lu avant l'écriture ; rien n'est retéléchargé après.
     expect(faux.blobsTelecharges).toBe(1)
   })
@@ -297,5 +297,158 @@ describe('Atelier : corbeille', () => {
     expect(fichiers['sections/lexique.md']).toBeUndefined()
     expect(fichiers['corbeille/lexique.md']).toBeUndefined()
     expect(faux.messages()[0]).toBe('Plan : suppression de Lexique, vidage de la corbeille')
+  })
+})
+
+describe('Atelier : textes', () => {
+  const LE_HEURT = 'k7f3qa'
+  const exemple = lireExemple()
+
+  async function ouvert(options: { faux?: FauxGitHub; nomBase?: string; fetch?: typeof fetch; delaiEnvoiTexteMs?: number } = {}) {
+    const faux = options.faux ?? (await FauxGitHub.creer(exemple))
+    const nomBase = options.nomBase ?? `test-texte-${++numero}`
+    const atelier = new Atelier({
+      fetch: options.fetch ?? faux.enFetch(),
+      nomBase,
+      delaiEnvoiMs: 60_000,
+      delaiEnvoiTexteMs: options.delaiEnvoiTexteMs ?? 60_000,
+    })
+    await atelier.demarrer()
+    if (atelier.lire().phase === 'connexion') await atelier.seConnecter('jeton-valide', 'autrice/katastrophe')
+    await atelier.synchroniser()
+    return { atelier, faux, nomBase }
+  }
+  const manuscrit = (a: Atelier) => enAtelier(a.lire()).manuscrit
+
+  it('garde le texte sur l’appareil en moins d’une seconde', async () => {
+    const { atelier, nomBase } = await ouvert()
+    atelier.modifierTexte(LE_HEURT, 'Premier jet.\n')
+    // L'état publié suit la frappe avec au plus 300 ms de retard.
+    await vi.waitFor(() => {
+      expect(manuscrit(atelier)?.textes.get(LE_HEURT)).toBe('Premier jet.\n')
+    })
+    await vi.waitFor(
+      async () => {
+        const autre = new Atelier({ fetch: () => Promise.reject(new TypeError('hors ligne')), nomBase })
+        await autre.demarrer()
+        expect(manuscrit(autre)?.textes.get(LE_HEURT)).toBe('Premier jet.\n')
+        expect(manuscrit(autre)?.textesModifies.has(LE_HEURT)).toBe(true)
+      },
+      { timeout: 1000 },
+    )
+    expect(enAtelier(atelier.lire())).toMatchObject({ synchro: { etat: 'local' }, enAttente: 1 })
+  })
+
+  it('envoie le texte 30 s après la dernière frappe (délai réduit ici)', async () => {
+    const { atelier, faux } = await ouvert({ delaiEnvoiTexteMs: 40 })
+    atelier.modifierTexte(LE_HEURT, 'Version 1')
+    atelier.modifierTexte(LE_HEURT, 'Version 2')
+    await vi.waitFor(() => {
+      expect(faux.fichiers()['sections/le-heurt.md']).toBe('Version 2')
+    })
+    expect(faux.envois).toBe(1)
+    expect(faux.messages()[0]).toBe('Rédaction : Le heurt')
+    await vi.waitFor(() => {
+      expect(enAtelier(atelier.lire())).toMatchObject({ synchro: { etat: 'a-jour' }, enAttente: 0 })
+    })
+  })
+
+  it('regroupe texte et plan dans un seul commit', async () => {
+    const { atelier, faux } = await ouvert()
+    atelier.modifierTexte(LE_HEURT, 'Texte.\n')
+    atelier.modifierPlan((p) => changerPages(p, LE_HEURT, 1), 'Le heurt sur 3 pages')
+    await atelier.envoyerMaintenant()
+    expect(faux.envois).toBe(1)
+    expect(faux.messages()[0]).toBe('Rédaction : Le heurt ; Plan : Le heurt sur 3 pages')
+  })
+
+  it('revenir au texte de GitHub retire la modification en attente', async () => {
+    const { atelier, faux } = await ouvert()
+    atelier.modifierTexte(LE_HEURT, 'Autre chose')
+    atelier.modifierTexte(LE_HEURT, exemple['sections/le-heurt.md'] ?? '')
+    expect(manuscrit(atelier)?.textesModifies.size).toBe(0)
+    await atelier.envoyerMaintenant()
+    expect(faux.envois).toBe(0)
+  })
+
+  it('critère du jalon : réseau coupé, écrire, fermer, rétablir, rouvrir : intact puis envoyé', async () => {
+    const faux = await FauxGitHub.creer(exemple)
+    let reseau = true
+    const fetchVariable: typeof fetch = (e, i) => (reseau ? faux.enFetch()(e, i) : Promise.reject(new TypeError('hors ligne')))
+    const { atelier, nomBase } = await ouvert({ faux, fetch: fetchVariable })
+
+    reseau = false
+    atelier.modifierTexte(LE_HEURT, 'Écrit dans le métro.\n')
+    await atelier.envoyerMaintenant() // onglet en arrière-plan, puis fermé
+    expect(enAtelier(atelier.lire())).toMatchObject({ synchro: { etat: 'hors-ligne' }, enAttente: 1 })
+
+    reseau = true
+    const rouvert = new Atelier({ fetch: faux.enFetch(), nomBase })
+    await rouvert.demarrer()
+    expect(manuscrit(rouvert)?.textes.get(LE_HEURT)).toBe('Écrit dans le métro.\n')
+    await rouvert.synchroniser()
+    expect(faux.fichiers()['sections/le-heurt.md']).toBe('Écrit dans le métro.\n')
+    expect(enAtelier(rouvert.lire())).toMatchObject({ synchro: { etat: 'a-jour' }, enAttente: 0 })
+  })
+
+  it('les frappes pendant un envoi partent au suivant', async () => {
+    const { atelier, faux } = await ouvert({ delaiEnvoiTexteMs: 30 })
+    atelier.modifierTexte(LE_HEURT, 'Début')
+    faux.avantMiseAJourBranche = () => {
+      atelier.modifierTexte(LE_HEURT, 'Début, puis la suite')
+      return Promise.resolve()
+    }
+    await atelier.envoyerMaintenant()
+    expect(faux.fichiers()['sections/le-heurt.md']).toBe('Début')
+    await vi.waitFor(() => {
+      expect(faux.fichiers()['sections/le-heurt.md']).toBe('Début, puis la suite')
+    })
+    expect(faux.envois).toBe(2)
+  })
+
+  it('conflit : rien n’est écrasé, puis « garder la mienne »', async () => {
+    const { atelier, faux } = await ouvert()
+    await faux.publier({ ...exemple, 'sections/le-heurt.md': 'Version de l’iPad.\n' })
+    atelier.modifierTexte(LE_HEURT, 'Version du Mac.\n')
+    await atelier.envoyerMaintenant()
+
+    const chemin = manuscrit(atelier)?.conflitsTexte.get(LE_HEURT) ?? ''
+    expect(chemin).toMatch(/^conflits\/le-heurt-.*\.md$/)
+    expect(faux.fichiers()['sections/le-heurt.md']).toBe('Version de l’iPad.\n')
+    expect(faux.fichiers()[chemin]).toBe('Version du Mac.\n')
+    expect(manuscrit(atelier)?.textes.get(LE_HEURT)).toBe('Version du Mac.\n')
+
+    await atelier.resoudreConflitTexte(LE_HEURT, 'local')
+    expect(faux.fichiers()['sections/le-heurt.md']).toBe('Version du Mac.\n')
+    expect(faux.fichiers()[chemin]).toBeUndefined()
+    expect(manuscrit(atelier)?.conflitsTexte.size).toBe(0)
+    expect(enAtelier(atelier.lire()).enAttente).toBe(0)
+  })
+
+  it('conflit : « prendre celle de GitHub » garde la sauvegarde dans conflits/', async () => {
+    const { atelier, faux } = await ouvert()
+    await faux.publier({ ...exemple, 'sections/le-heurt.md': 'Version de l’iPad.\n' })
+    atelier.modifierTexte(LE_HEURT, 'Version du Mac.\n')
+    await atelier.envoyerMaintenant()
+    const chemin = manuscrit(atelier)?.conflitsTexte.get(LE_HEURT) ?? ''
+
+    await atelier.resoudreConflitTexte(LE_HEURT, 'distant')
+    expect(manuscrit(atelier)?.textes.get(LE_HEURT)).toBe('Version de l’iPad.\n')
+    expect(faux.fichiers()[chemin]).toBe('Version du Mac.\n')
+    expect(enAtelier(atelier.lire()).enAttente).toBe(0)
+  })
+
+  it('un texte modifié ailleurs s’affiche à la synchronisation s’il n’y a rien en attente', async () => {
+    const { atelier, faux } = await ouvert()
+    await faux.publier({ ...exemple, 'sections/le-heurt.md': 'Version de l’iPad.\n' })
+    await atelier.synchroniser()
+    expect(manuscrit(atelier)?.textes.get(LE_HEURT)).toBe('Version de l’iPad.\n')
+    expect(manuscrit(atelier)?.textesDistants.get(LE_HEURT)).toBe('Version de l’iPad.\n')
+  })
+
+  it('le texte suit sa section renommée avant l’envoi', async () => {
+    const { atelier } = await ouvert()
+    atelier.modifierPlan((p) => modifierSection(p, LE_HEURT, { titre: 'Le choc' }), 'modification de Le heurt')
+    expect(manuscrit(atelier)?.textes.get(LE_HEURT)).toBe(exemple['sections/le-heurt.md'])
   })
 })

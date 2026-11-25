@@ -21,7 +21,7 @@ export function slug(titre: string): string {
   return (dernierTiret > 0 ? coupe.slice(0, dernierTiret) : simple.slice(0, LONGUEUR_MAX)) || 'section'
 }
 
-export type Dossier = 'sections/' | 'corbeille/'
+export type Dossier = 'sections/' | 'corbeille/' | 'conflits/'
 
 /** Premier chemin libre : `dossier/base.md`, puis `dossier/base-2.md`, etc. */
 export function cheminLibre(dossier: Dossier, base: string, pris: ReadonlySet<string>): string {

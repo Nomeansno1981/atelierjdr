@@ -12,6 +12,7 @@
 
 import { baseDuChemin, cheminLibre, type Dossier } from '../domaine/nomFichier'
 import { lirePlan, serialiserPlan, toutesLesSections, type Plan } from '../domaine/plan'
+import { shaBlobGit } from './empreinte'
 import { ErreurGitHub, type ClientGitHub, type Depot } from './client'
 import { lireArbreDuCommit, lireBlob, lireTete, racineDepot } from './lecture'
 import { CHEMIN_PLAN } from './synchro'
@@ -130,24 +131,57 @@ function corrigerChemins(plan: Plan, corrections: ReadonlyMap<string, string>): 
   }
 }
 
+/** Texte d'une section à envoyer. */
+export interface TexteAEnvoyer {
+  id: string
+  contenu: string
+  /** SHA du fichier sur GitHub quand la modification a commencé. */
+  shaBase: string | null
+  /** Conflit déjà détecté : la version locale est sauvegardée à ce chemin. */
+  conflit?: { chemin: string } | undefined
+  /** Résolution « garder ma version » : écrire même si GitHub a changé. */
+  forcer?: boolean
+  /** Résolution « prendre celle de GitHub » : ne rien écrire, effacer la sauvegarde. */
+  abandonner?: boolean
+}
+
+export type ResultatTexte =
+  | { type: 'ecrit' }
+  | { type: 'identique' }
+  | { type: 'abandonne' }
+  /** GitHub a une autre version : la locale est sauvegardée dans conflits/. */
+  | { type: 'conflit'; chemin: string; shaDistant: string | null }
+
 export interface DemandeEnvoi {
-  plan: Plan
-  /** SHA de plan.json quand les modifications locales ont commencé. */
+  /** Plan modifié sur l'appareil, ou null si seul du texte est à envoyer. */
+  plan: Plan | null
+  /** SHA de plan.json quand les modifications du plan ont commencé. */
   shaPlanBase: string | null
-  message: string
-  /** Envoie même si plan.json a changé sur GitHub entre-temps. */
+  /** Envoie le plan même si plan.json a changé sur GitHub entre-temps. */
   forcer: boolean
   /** Sections dont la corbeille a été vidée : leurs fichiers sont supprimés. */
   aSupprimer?: readonly string[]
+  textes?: readonly TexteAEnvoyer[]
+  /** Message de commit, selon les textes finalement en conflit. */
+  message: (conflits: readonly string[]) => string
+  maintenant?: Date
 }
 
 export type ResultatEnvoi =
-  | { type: 'envoye'; commit: string; plan: Plan; contenuPlan: string }
+  | {
+      type: 'envoye'
+      commit: string
+      plan: Plan
+      contenuPlan: string
+      textes: ReadonlyMap<string, ResultatTexte>
+      /** Contenus écrits : connus de l'appareil, inutile de les retélécharger. */
+      contenus: string[]
+    }
   | { type: 'conflit'; planDistant: Plan; shaPlanDistant: string }
 
 const ESSAIS = 4
 
-export async function envoyerPlan(
+export async function envoyer(
   client: ClientGitHub,
   depot: Depot,
   branche: string,
@@ -165,34 +199,43 @@ export async function envoyerPlan(
     }
     const texteDistant = await lireBlob(client, depot, shaPlanDistant)
     const planDistant = lirePlan(texteDistant)
-    if (!demande.forcer && shaPlanDistant !== demande.shaPlanBase) {
+    if (demande.plan && !demande.forcer && shaPlanDistant !== demande.shaPlanBase) {
       return { type: 'conflit', planDistant, shaPlanDistant }
     }
 
     const { entrees, plan } = changementsFichiers(
       planDistant,
-      demande.plan,
+      demande.plan ?? planDistant,
       instantane.fichiers,
       new Set(demande.aSupprimer ?? []),
+    )
+    const { resultats, conflits, contenus } = await ajouterTextes(
+      entrees,
+      demande.textes ?? [],
+      planDistant,
+      plan,
+      instantane.fichiers,
+      demande.maintenant ?? new Date(),
     )
     const contenuPlan = serialiserPlan(plan)
     if (contenuPlan !== texteDistant) {
       entrees.push({ path: CHEMIN_PLAN, mode: '100644', type: 'blob', content: contenuPlan })
     }
-    if (entrees.length === 0) return { type: 'envoye', commit: tete, plan, contenuPlan }
+    contenus.push(contenuPlan, '')
+    if (entrees.length === 0) return { type: 'envoye', commit: tete, plan, contenuPlan, textes: resultats, contenus }
 
     const arbre = await client.ecrire('POST', `${racine}/git/trees`, {
       base_tree: instantane.arbre,
       tree: entrees,
     })
     const commit = await client.ecrire('POST', `${racine}/git/commits`, {
-      message: demande.message,
+      message: demande.message(conflits),
       tree: sha(arbre),
       parents: [tete],
     })
     try {
       await client.ecrire('PATCH', `${racine}/git/refs/heads/${nomRef}`, { sha: sha(commit), force: false })
-      return { type: 'envoye', commit: sha(commit), plan, contenuPlan }
+      return { type: 'envoye', commit: sha(commit), plan, contenuPlan, textes: resultats, contenus }
     } catch (e) {
       // Un autre appareil a envoyé entre notre lecture et notre écriture :
       // on recommence sur la nouvelle tête de branche.
@@ -203,6 +246,79 @@ export async function envoyerPlan(
   throw new ErreurGitHub('concurrence', 'Le dépôt change trop vite : l’envoi sera retenté.')
 }
 
+/**
+ * Ajoute les textes aux entrées de l'arbre. Un texte n'écrase jamais une
+ * version de GitHub qu'il n'a pas vue : si le fichier a changé depuis le
+ * début des modifications locales, la version locale est écrite dans
+ * conflits/ et celle de GitHub reste en place.
+ */
+async function ajouterTextes(
+  entrees: EntreeArbre[],
+  textes: readonly TexteAEnvoyer[],
+  planDistant: Plan,
+  planLocal: Plan,
+  arbre: ReadonlyMap<string, string>,
+  maintenant: Date,
+): Promise<{ resultats: Map<string, ResultatTexte>; conflits: string[]; contenus: string[] }> {
+  const distants = cheminsParId(planDistant)
+  const locaux = cheminsParId(planLocal)
+  const resultats = new Map<string, ResultatTexte>()
+  const conflits: string[] = []
+  const contenus: string[] = []
+  const pris = new Set([...arbre.keys(), ...entrees.map((e) => e.path)])
+
+  const ecrire = (path: string, content: string) => {
+    const i = entrees.findIndex((e) => e.path === path)
+    const entree: EntreeArbre = { path, mode: '100644', type: 'blob', content }
+    if (i === -1) entrees.push(entree)
+    else entrees[i] = entree
+    contenus.push(content)
+  }
+  const effacer = (path: string) => {
+    if (arbre.has(path) && !entrees.some((e) => e.path === path)) {
+      entrees.push({ path, mode: '100644', type: 'blob', sha: null })
+    }
+  }
+
+  for (const t of textes) {
+    if (t.abandonner) {
+      if (t.conflit) effacer(t.conflit.chemin)
+      resultats.set(t.id, { type: 'abandonne' })
+      continue
+    }
+    const cheminDistant = distants.get(t.id)
+    const shaDistant = (cheminDistant !== undefined ? arbre.get(cheminDistant) : undefined) ?? null
+    const cheminLocal = locaux.get(t.id)
+    const shaLocal = await shaBlobGit(t.contenu)
+
+    if (cheminLocal !== undefined && shaDistant === shaLocal) {
+      if (t.conflit) effacer(t.conflit.chemin)
+      resultats.set(t.id, { type: 'identique' })
+      continue
+    }
+    if (cheminLocal === undefined || (shaDistant !== t.shaBase && !t.forcer)) {
+      // Section disparue du plan, ou texte modifié ailleurs : on sauvegarde.
+      const base = cheminLocal ?? cheminDistant ?? `section-${t.id}.md`
+      const chemin = t.conflit?.chemin ?? cheminLibre('conflits/', `${baseDuChemin(base)}-${horodatage(maintenant)}`, pris)
+      pris.add(chemin)
+      ecrire(chemin, t.contenu)
+      conflits.push(t.id)
+      resultats.set(t.id, { type: 'conflit', chemin, shaDistant })
+      continue
+    }
+    ecrire(cheminLocal, t.contenu)
+    if (t.conflit) effacer(t.conflit.chemin)
+    resultats.set(t.id, { type: 'ecrit' })
+  }
+  return { resultats, conflits, contenus }
+}
+
+/** « 2026-11-25-1432 », à l'heure de l'appareil. */
+function horodatage(d: Date): string {
+  const deux = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${deux(d.getMonth() + 1)}-${deux(d.getDate())}-${deux(d.getHours())}${deux(d.getMinutes())}`
+}
+
 function sha(reponse: unknown): string {
   if (typeof reponse === 'object' && reponse !== null && 'sha' in reponse && typeof reponse.sha === 'string') {
     return reponse.sha
@@ -210,11 +326,29 @@ function sha(reponse: unknown): string {
   throw new ErreurGitHub('reponse', 'GitHub a renvoyé une réponse inattendue.')
 }
 
-/** Message de commit en français, à partir des descriptions des opérations. */
-export function messageCommit(descriptions: readonly string[]): string {
-  const uniques = [...new Set(descriptions)]
-  if (uniques.length === 0) return 'Plan : mise à jour'
-  if (uniques.length <= 3) return `Plan : ${uniques.join(', ')}`
-  const reste = uniques.length - 3
-  return `Plan : ${uniques.slice(0, 3).join(', ')} et ${reste} autre${reste > 1 ? 's' : ''} modification${reste > 1 ? 's' : ''}`
+/**
+ * Message de commit en français. Exemples : « Rédaction : Le heurt, Les
+ * serments » ; « Plan : déplacement de Le heurt » ; les deux séparés par
+ * un point-virgule.
+ */
+export function messageCommit(
+  descriptionsPlan: readonly string[],
+  titresRedaction: readonly string[] = [],
+  titresEnConflit: readonly string[] = [],
+): string {
+  const parties: string[] = []
+  const redaction = [...new Set(titresRedaction)]
+  if (redaction.length > 0) parties.push(`Rédaction : ${liste(redaction)}`)
+  if (titresEnConflit.length > 0) {
+    parties.push(`Conflit : version de l’appareil sauvegardée dans conflits/ pour ${liste([...new Set(titresEnConflit)])}`)
+  }
+  const plan = [...new Set(descriptionsPlan)]
+  if (plan.length > 0) parties.push(`Plan : ${liste(plan)}`)
+  return parties.length > 0 ? parties.join(' ; ') : 'Plan : mise à jour'
+}
+
+function liste(elements: readonly string[]): string {
+  if (elements.length <= 3) return elements.join(', ')
+  const reste = elements.length - 3
+  return `${elements.slice(0, 3).join(', ')} et ${reste} autre${reste > 1 ? 's' : ''} modification${reste > 1 ? 's' : ''}`
 }
