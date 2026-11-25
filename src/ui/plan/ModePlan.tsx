@@ -22,6 +22,7 @@ import {
   supprimerPartie,
   voisineDeFusion,
 } from '../../domaine/parties'
+import { parEndroit, remplacerDans, remplacerDansLePlan, type OccurrenceChoisie } from '../../domaine/remplacement'
 import { numerosDesParties } from '../../domaine/romains'
 import { LIBELLES_STATUT, reglesTypo, STATUTS, type Plan } from '../../domaine/plan'
 import { normaliser } from '../../domaine/typographie/normaliser'
@@ -58,6 +59,14 @@ type Panneau =
 
 const DUREE_BANDEAU_MS = 10_000
 
+/** Dernier remplacement dans tout le manuscrit, pour pouvoir l'annuler. */
+interface DernierRemplacement {
+  message: string
+  restaurations: { id: string; avant: string; apres: string }[]
+  /** Description de l'opération sur le plan (titres, résumés), s'il y en a eu une. */
+  description: string | null
+}
+
 function champDeSaisie(cible: EventTarget | null): boolean {
   return (
     cible instanceof HTMLElement &&
@@ -76,6 +85,7 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
   const textes = etat.manuscrit?.textes
   const [panneau, setPanneau] = useState<Panneau | null>(null)
   const [supprimee, setSupprimee] = useState<{ id: string; titre: string } | null>(null)
+  const [remplacements, setRemplacements] = useState<DernierRemplacement | null>(null)
   const [zoom, setZoom] = useState<Zoom>(lireZoom)
   const menu = useRef<HTMLDetailsElement>(null)
 
@@ -132,6 +142,52 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
   }
   /** Titres et résumés suivent la convention typographique, une fois validés. */
   const typo = (texte: string) => normaliser(texte, reglesTypo(plan)).texte
+
+  /**
+   * Remplace dans tout le manuscrit : les textes un par un, les titres et
+   * résumés en une opération du plan. Un bandeau propose ensuite d'annuler.
+   */
+  function remplacerPartout(choix: OccurrenceChoisie[], requete: string, remplacement: string) {
+    const restaurations: DernierRemplacement['restaurations'] = []
+    for (const [cle, groupe] of parEndroit(choix)) {
+      const [id, champ] = cle.split('|')
+      if (champ !== 'texte' || id === undefined) continue
+      const avant = textes?.get(id) ?? ''
+      const apres = remplacerDans(avant, groupe, remplacement)
+      if (apres === avant) continue
+      atelier.modifierTexte(id, apres)
+      restaurations.push({ id, avant, apres })
+    }
+    const description = `remplacement de « ${requete} » par « ${remplacement} »`
+    const dansLePlan = choix.some((o) => o.champ !== 'texte')
+    if (dansLePlan) atelier.modifierPlan((p) => remplacerDansLePlan(p, choix, remplacement), description)
+    void atelier.envoyerMaintenant()
+    const n = choix.length
+    const sections = new Set(choix.map((o) => o.id)).size
+    setRemplacements({
+      message: `${n} remplacement${n > 1 ? 's' : ''} dans ${sections} section${sections > 1 ? 's' : ''}.`,
+      restaurations,
+      description: dansLePlan ? description : null,
+    })
+  }
+
+  /** Rend les textes d'avant (s'ils n'ont pas changé depuis) et annule l'opération sur le plan. */
+  function annulerRemplacements() {
+    if (!remplacements) return
+    let ignores = 0
+    for (const r of remplacements.restaurations) {
+      if ((textes?.get(r.id) ?? '') === r.apres) atelier.modifierTexte(r.id, r.avant)
+      else ignores++
+    }
+    if (remplacements.description !== null && etat.annulable === remplacements.description) atelier.annuler()
+    void atelier.envoyerMaintenant()
+    setRemplacements(null)
+    if (ignores > 0) {
+      window.alert(
+        `${ignores} section${ignores > 1 ? 's ont' : ' a'} été modifiée${ignores > 1 ? 's' : ''} depuis le remplacement : laissée${ignores > 1 ? 's' : ''} telle${ignores > 1 ? 's' : ''} quelle${ignores > 1 ? 's' : ''}. L’historique GitHub garde la version d’avant.`,
+      )
+    }
+  }
 
   /** Annonce le nombre de remplacements dans tout le manuscrit, puis les applique. */
   function normaliserTout(regles: ReglesTypo) {
@@ -213,7 +269,7 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
             <summary>Outils</summary>
             <div className="menu-contenu">
               <button type="button" onClick={() => { choisir(() => { setPanneau({ type: 'recherche' }) }) }}>
-                Chercher dans le manuscrit <kbd>⌘⇧F</kbd>
+                Chercher et remplacer… <kbd>⌘⇧F</kbd>
               </button>
               <button type="button" onClick={() => { choisir(() => { setPanneau({ type: 'compilation' }) }) }}>
                 Compiler…
@@ -350,6 +406,24 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
         />
       </main>
 
+      {remplacements && (
+        <div className="bandeau-flottant" role="status">
+          <span>{remplacements.message}</span>
+          <button type="button" onClick={annulerRemplacements}>
+            Annuler
+          </button>
+          <button
+            type="button"
+            className="bouton-icone"
+            aria-label="Fermer"
+            onClick={() => {
+              setRemplacements(null)
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
       {supprimee && (
         <div className="bandeau-flottant" role="status">
           <span>Section supprimée.</span>
@@ -478,7 +552,16 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
           textes={etat.manuscrit?.textes ?? new Map<string, string>()}
           ouvrir={(id, debut, fin) => {
             setPanneau(null)
-            naviguer({ vue: 'section', id, selection: { debut, fin } })
+            const s = plan.sections.find((x) => x.id === id)
+            if (s?.type === 'texte') naviguer({ vue: 'section', id, selection: debut === fin ? null : { debut, fin } })
+            else setPanneau({ type: 'section', id })
+          }}
+          remplacement={{
+            typographie: typo,
+            appliquer: (choix, requete, remplacement) => {
+              setPanneau(null)
+              remplacerPartout(choix, requete, remplacement)
+            },
           }}
           fermer={() => {
             setPanneau(null)

@@ -551,3 +551,45 @@
     grid-column: auto;
   }
 }
+
+/* --- Remplacer dans tout le manuscrit ---------------------------------------- */
+
+.recherche > label:not(.lecteur-ecran):not(.case) {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.resultats .champ {
+  color: var(--texte-doux);
+  font-weight: 600;
+}
+
+.resultats .occurrence {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bordure);
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.resultats .occurrence input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  margin: 1px 0 0;
+}
+
+.resultats del {
+  background: var(--erreur-fond);
+  color: var(--erreur);
+}
+
+.resultats ins {
+  background: var(--statut-definitif);
+  color: inherit;
+  text-decoration: none;
+}

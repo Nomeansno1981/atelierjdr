@@ -45,21 +45,38 @@ function normaliser(texte: string): TexteNormalise {
   return { texte: normal, origine }
 }
 
+export interface OptionsRecherche {
+  /** Nombre maximal d'occurrences (200 par défaut : au-delà, l'affichage n'aide plus). */
+  max?: number
+  /** Seulement les mots entiers : ni lettre ni chiffre juste avant ou juste après. */
+  motEntier?: boolean
+}
+
+const LETTRE_OU_CHIFFRE = /[\p{L}\p{N}]/u
+
 export function rechercher(
   sections: readonly { id: string; titre: string; texte: string }[],
   requete: string,
+  options: OptionsRecherche = {},
 ): ResultatSection[] {
   const cherche = normaliser(requete.trim()).texte
   if (cherche.length < 2) return []
+  const max = options.max ?? MAX_OCCURRENCES
   const resultats: ResultatSection[] = []
   let total = 0
 
   for (const s of sections) {
     const { texte, origine } = normaliser(s.texte)
     const occurrences: Occurrence[] = []
-    for (let i = texte.indexOf(cherche); i !== -1 && total < MAX_OCCURRENCES; i = texte.indexOf(cherche, i + cherche.length)) {
+    for (let i = texte.indexOf(cherche); i !== -1 && total < max; i = texte.indexOf(cherche, i + 1)) {
       const debut = origine[i] ?? 0
       const fin = origine[i + cherche.length] ?? s.texte.length
+      if (options.motEntier && (LETTRE_OU_CHIFFRE.test(s.texte[debut - 1] ?? '') || LETTRE_OU_CHIFFRE.test(s.texte[fin] ?? ''))) {
+        continue
+      }
+      // Pas de chevauchement : la suivante commence après celle-ci.
+      const precedente = occurrences.at(-1)
+      if (precedente && debut < precedente.fin) continue
       occurrences.push({
         debut,
         fin,
