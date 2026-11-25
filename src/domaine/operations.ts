@@ -8,6 +8,7 @@
 import { baseDuChemin, cheminLibre, slug } from './nomFichier'
 import type { ReglesTypo } from './typographie/regles'
 import {
+  TITRE_PAGE_BLANCHE,
   toutesLesSections,
   type Debut,
   type Livre,
@@ -58,10 +59,31 @@ export function ordreAvecDeplacement<T extends { id: string }>(sections: readonl
   return [...sans.slice(0, borne), element, ...sans.slice(borne)]
 }
 
+/**
+ * Partie d'une section placée entre ces deux voisines : celle des voisines
+ * si elles sont de la même partie ; à la frontière entre deux parties, la
+ * sienne si elle est l'une des deux, sinon celle de la précédente. Une
+ * partie reste ainsi d'un seul tenant dans le livre.
+ */
+export function partieEntre(propre: string, avant: { partie: string } | undefined, apres: { partie: string } | undefined): string {
+  if (avant && apres && avant.partie === apres.partie) return avant.partie
+  if (avant?.partie === propre || apres?.partie === propre) return propre
+  return avant?.partie ?? apres?.partie ?? propre
+}
+
+/** Déplace une section ; elle prend au besoin la partie de ses nouvelles voisines. */
 export function deplacer(plan: Plan, id: string, index: number): Plan {
   const actuel = plan.sections.findIndex((s) => s.id === id)
   if (actuel === -1 || actuel === index) return plan
-  return { ...plan, sections: ordreAvecDeplacement(plan.sections, id, index) }
+  const ordre = ordreAvecDeplacement(plan.sections, id, index)
+  const i = ordre.findIndex((s) => s.id === id)
+  const section = ordre[i]
+  if (!section) return plan
+  const partie = partieEntre(section.partie, ordre[i - 1], ordre[i + 1])
+  return {
+    ...plan,
+    sections: partie === section.partie ? ordre : ordre.map((s) => (s.id === id ? { ...s, partie } : s)),
+  }
 }
 
 export function changerPages(plan: Plan, id: string, delta: number): Plan {
@@ -90,7 +112,7 @@ export function modifierSection(plan: Plan, id: string, modif: Partial<Modificat
   if (communs.pages !== undefined) communs.pages = Math.max(1, Math.round(communs.pages))
   if (communs.partie !== undefined && !plan.parties.some((p) => p.id === communs.partie)) delete communs.partie
 
-  if (s.type === 'hors-texte') return remplacer(plan, { ...s, ...communs })
+  if (s.type !== 'texte') return remplacer(plan, { ...s, ...communs })
 
   const nouvelle: SectionTexte = { ...s, ...communs }
   if (motsParPage !== undefined) {
@@ -103,7 +125,7 @@ export function modifierSection(plan: Plan, id: string, modif: Partial<Modificat
 }
 
 export interface NouvelleSection {
-  type: 'texte' | 'hors-texte'
+  type: 'texte' | 'hors-texte' | 'blanche'
   titre: string
   partie: string
   pages: number
@@ -111,19 +133,20 @@ export interface NouvelleSection {
 
 /** Crée une section à `index` dans l'ordre du plan. */
 export function creerSection(plan: Plan, nouvelle: NouvelleSection, index: number, id: string): Plan {
-  const titre = nouvelle.titre.trim() || 'Sans titre'
+  const titre = nouvelle.titre.trim() || (nouvelle.type === 'blanche' ? TITRE_PAGE_BLANCHE : 'Sans titre')
   const commun = {
     id,
     titre,
     partie: nouvelle.partie,
-    statut: 'a-ecrire' as const,
+    // Une page blanche n'a rien à écrire : elle est d'emblée définitive.
+    statut: nouvelle.type === 'blanche' ? ('definitif' as const) : ('a-ecrire' as const),
     pages: Math.max(1, Math.round(nouvelle.pages)),
     debut: 'indifferent' as const,
     resume: '',
   }
   const section: Section =
-    nouvelle.type === 'hors-texte'
-      ? { type: 'hors-texte', ...commun }
+    nouvelle.type !== 'texte'
+      ? { type: nouvelle.type, ...commun }
       : {
           type: 'texte',
           ...commun,

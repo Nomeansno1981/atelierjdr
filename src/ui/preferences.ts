@@ -37,3 +37,24 @@ function abonner(ecouteur: () => void): () => void {
 export function useInsecablesVisibles(): boolean {
   return useSyncExternalStore(abonner, lire)
 }
+
+export type Zoom = 'compact' | 'normal' | 'detaille'
+const CLE_ZOOM = 'atelier.zoom'
+
+/** Zoom du plan sur cet appareil. */
+export function lireZoom(): Zoom {
+  try {
+    const z = localStorage.getItem(CLE_ZOOM)
+    return z === 'compact' || z === 'detaille' ? z : 'normal'
+  } catch {
+    return 'normal'
+  }
+}
+
+export function ecrireZoom(zoom: Zoom): void {
+  try {
+    localStorage.setItem(CLE_ZOOM, zoom)
+  } catch {
+    // Préférence non mémorisée : sans conséquence.
+  }
+}

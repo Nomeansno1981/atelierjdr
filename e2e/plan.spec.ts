@@ -45,7 +45,8 @@ test.describe('à la souris', () => {
     // Envoi groupé environ 5 s plus tard.
     await expect(etat(page)).toHaveText('Synchronisé', { timeout: 15_000 })
     expect(ordreSurGitHub(faux)).toEqual(attendu)
-    expect(faux.messages()[0]).toBe('Plan : déplacement de Créer son personnage')
+    // Placée entre deux sections de la Présentation, elle en prend la partie.
+    expect(faux.messages()[0]).toBe('Plan : déplacement de Créer son personnage dans la partie Présentation')
     expect(erreurs).toEqual([])
   })
 

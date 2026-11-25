@@ -9,6 +9,7 @@
  *   « # Lexique » pour une partie non numérotée ;
  * - « ## Titre », puis une ligne vide et le texte exact de la section ;
  * - hors-texte : « <!-- HORS-TEXTE : Titre (p. 7) --> » ou « (p. 7-8) » ;
+ * - page blanche posée à la main : « <!-- PAGE BLANCHE (p. 2) --> » ;
  * - repères de pages (option) : « <!-- pages 12-14 --> » sous le titre ;
  * - une ligne vide entre deux blocs, fins de ligne LF, un seul saut de
  *   ligne final. Seuls les sauts de ligne de fin de chaque texte sont
@@ -63,6 +64,10 @@ export function compiler(plan: Plan, textes: ReadonlyMap<string, string>, option
 
     if (s.type === 'hors-texte') {
       blocs.push(`<!-- HORS-TEXTE : ${s.titre} (p. ${pages}) -->`)
+      continue
+    }
+    if (s.type === 'blanche') {
+      blocs.push(`<!-- PAGE BLANCHE (p. ${pages}) -->`)
       continue
     }
     const tete = options.reperesPages ? `## ${s.titre}\n<!-- pages ${pages} -->` : `## ${s.titre}`

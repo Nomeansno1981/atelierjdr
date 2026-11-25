@@ -122,6 +122,12 @@
   font-size: 0.95rem;
 }
 
+.encadre-blanche {
+  background-image: repeating-linear-gradient(45deg, transparent 0 7px, var(--hachure) 7px 9px);
+  color: var(--texte-doux);
+  font-style: italic;
+}
+
 .encadre-hors-texte p {
   margin: 0;
 }
@@ -167,4 +173,10 @@
 /* Les sauts du sommaire s'arrêtent sous la barre fixe, pas dessous. */
 .lecture [id^='lecture-'] {
   scroll-margin-top: 112px;
+}
+
+/* Sur téléphone, l'en-tête passe à la ligne plutôt que de déborder. */
+.barre-lecture {
+  flex-wrap: wrap;
+  row-gap: 6px;
 }

@@ -103,6 +103,9 @@ def compiler(plan, textes, sections_vides_incluses, reperes_pages):
         if s["type"] == "hors-texte":
             blocs.append(f"<!-- HORS-TEXTE : {s['titre']} (p. {pages}) -->")
             continue
+        if s["type"] == "blanche":
+            blocs.append(f"<!-- PAGE BLANCHE (p. {pages}) -->")
+            continue
         tete = f"## {s['titre']}"
         if reperes_pages:
             tete += f"\n<!-- pages {pages} -->"

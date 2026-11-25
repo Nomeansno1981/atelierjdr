@@ -9,6 +9,8 @@ import type { EtatOuvert } from '../../etat/atelier'
 import { Dialogue } from '../commun/Dialogue'
 import { IconeHorsTexte } from '../commun/icones'
 import { IndicateurSynchro } from '../commun/IndicateurSynchro'
+import { SelecteurVue } from '../commun/SelecteurVue'
+import { lireZoom } from '../preferences'
 import { formaterNombre, motsParSection } from '../plan/format'
 import type { Route } from '../routes'
 
@@ -104,13 +106,12 @@ export default function LectureContinue({ etat, plan, naviguer }: Proprietes) {
       <aside className="colonne-sections">{tableDesMatieres}</aside>
       <div>
         <div className="barre barre-redaction">
-          <div className="barre-ligne">
-            <button type="button" className="bouton-retour" onClick={() => { naviguer({ vue: 'plan' }) }}>
-              ← Plan
-            </button>
+          {/* Le sélecteur de vue ramène au plan : pas de bouton « ← Plan » en double. */}
+          <div className="barre-ligne barre-lecture">
             <button type="button" className="bouton-tiroir" onClick={() => { setSommaire(true) }}>
               Sommaire
             </button>
+            <SelecteurVue vue="lecture" zoom={lireZoom()} naviguer={naviguer} />
             <span className="espace" />
             <IndicateurSynchro synchro={etat.synchro} enAttente={etat.enAttente} conflit={etat.conflit !== null} />
           </div>
@@ -134,6 +135,15 @@ export default function LectureContinue({ etat, plan, naviguer }: Proprietes) {
               )
             }
             const s = b.section
+            if (s.type === 'blanche') {
+              return (
+                <aside key={s.id} id={`lecture-${s.id}`} className="encadre-hors-texte encadre-blanche">
+                  <p>
+                    {s.titre}, {b.pages}
+                  </p>
+                </aside>
+              )
+            }
             if (s.type === 'hors-texte') {
               return (
                 <aside key={s.id} id={`lecture-${s.id}`} className="encadre-hors-texte">

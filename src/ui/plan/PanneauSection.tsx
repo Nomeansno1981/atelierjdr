@@ -57,11 +57,14 @@ export function PanneauSection({ plan, section, emplacement, mots, valider, supp
         ? `Page ${emplacement.premiere}`
         : `Pages ${emplacement.premiere} à ${emplacement.derniere}`),
     mots && `${formaterNombre(mots.ecrits)} / ${formaterNombre(mots.cible)} mots`,
-    section.type === 'texte' ? section.fichier : 'Hors-texte',
+    section.type === 'texte' ? section.fichier : section.type === 'blanche' ? 'Page laissée blanche' : 'Hors-texte',
   ].filter(Boolean)
 
   return (
-    <Dialogue titre={section.type === 'hors-texte' ? 'Hors-texte' : 'Section'} onFermer={fermer}>
+    <Dialogue
+      titre={section.type === 'hors-texte' ? 'Hors-texte' : section.type === 'blanche' ? 'Page blanche' : 'Section'}
+      onFermer={fermer}
+    >
       <form className="formulaire" onSubmit={envoyer}>
         <p className="aide">{infos.join(' · ')}</p>
 
@@ -82,16 +85,19 @@ export function PanneauSection({ plan, section, emplacement, mots, valider, supp
               ))}
             </select>
           </div>
-          <div>
-            <label htmlFor={`${id}-statut`}>Statut</label>
-            <select id={`${id}-statut`} value={statut} onChange={(e) => { setStatut(e.target.value as Statut) }}>
-              {STATUTS.map((s) => (
-                <option key={s} value={s}>
-                  {LIBELLES_STATUT[s]}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Une page blanche n'a pas de statut : il n'y a rien à y écrire. */}
+          {section.type !== 'blanche' && (
+            <div>
+              <label htmlFor={`${id}-statut`}>Statut</label>
+              <select id={`${id}-statut`} value={statut} onChange={(e) => { setStatut(e.target.value as Statut) }}>
+                {STATUTS.map((s) => (
+                  <option key={s} value={s}>
+                    {LIBELLES_STATUT[s]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="champs-2">

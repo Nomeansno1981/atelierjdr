@@ -19,6 +19,8 @@ import type { Route } from '../routes'
 import { IconeAnnuler, IconeCorbeille, IconeReglages, IconeRetablir, IconeSynchro } from '../commun/icones'
 import { BandeauFusion } from '../commun/BandeauFusion'
 import { IndicateurSynchro } from '../commun/IndicateurSynchro'
+import { SelecteurVue } from '../commun/SelecteurVue'
+import { lireZoom, type Zoom } from '../preferences'
 import { formaterNombre, motsParSection, type MotsSection } from './format'
 import { Grille } from './Grille'
 import { PanneauCorbeille } from './PanneauCorbeille'
@@ -36,23 +38,7 @@ type Panneau =
   | { type: 'corbeille' }
   | { type: 'reglages' }
 
-export type Zoom = 'compact' | 'normal' | 'detaille'
-const ZOOMS: { valeur: Zoom; libelle: string }[] = [
-  { valeur: 'compact', libelle: 'Compact' },
-  { valeur: 'normal', libelle: 'Normal' },
-  { valeur: 'detaille', libelle: 'Détaillé' },
-]
-const CLE_ZOOM = 'atelier.zoom'
 const DUREE_BANDEAU_MS = 10_000
-
-function lireZoom(): Zoom {
-  try {
-    const z = localStorage.getItem(CLE_ZOOM)
-    return z === 'compact' || z === 'detaille' ? z : 'normal'
-  } catch {
-    return 'normal'
-  }
-}
 
 function champDeSaisie(cible: EventTarget | null): boolean {
   return (
@@ -151,15 +137,6 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
     void atelier.envoyerMaintenant()
   }
 
-  function choisirZoom(z: Zoom) {
-    setZoom(z)
-    try {
-      localStorage.setItem(CLE_ZOOM, z)
-    } catch {
-      // Préférence non mémorisée : sans conséquence.
-    }
-  }
-
   const sectionOuverte = panneau?.type === 'section' ? plan.sections.find((s) => s.id === panneau.id) : undefined
 
   return (
@@ -195,29 +172,13 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
           >
             <IconeRetablir />
           </button>
-          <div className="zoom" role="group" aria-label="Zoom">
-            {ZOOMS.map((z) => (
-              <button
-                key={z.valeur}
-                type="button"
-                aria-pressed={zoom === z.valeur}
-                onClick={() => {
-                  choisirZoom(z.valeur)
-                }}
-              >
-                {z.libelle}
-              </button>
-            ))}
-          </div>
+          <SelecteurVue vue="plan" zoom={zoom} choisirZoom={setZoom} naviguer={naviguer} />
           <span className="espace" />
           <details className="menu-outils" ref={menu}>
             <summary>Outils</summary>
             <div className="menu-contenu">
               <button type="button" onClick={() => { choisir(() => { setPanneau({ type: 'recherche' }) }) }}>
                 Chercher dans le manuscrit <kbd>⌘⇧F</kbd>
-              </button>
-              <button type="button" onClick={() => { choisir(() => { naviguer({ vue: 'lecture' }) }) }}>
-                Lecture continue
               </button>
               <button type="button" onClick={() => { choisir(() => { setPanneau({ type: 'compilation' }) }) }}>
                 Compiler…
@@ -329,7 +290,14 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
             setPanneau({ type: 'creation', index })
           }}
           deplacer={(id, index) => {
-            atelier.modifierPlan((p) => deplacer(p, id, index), `déplacement de ${titre(id)}`)
+            const avant = plan.sections.find((x) => x.id === id)?.partie
+            const apres = deplacer(plan, id, index).sections.find((x) => x.id === id)?.partie
+            const nouvelle = plan.parties.find((p) => p.id === apres)?.titre
+            const description =
+              apres !== avant && nouvelle
+                ? `déplacement de ${titre(id)} dans la partie ${nouvelle}`
+                : `déplacement de ${titre(id)}`
+            atelier.modifierPlan((p) => deplacer(p, id, index), description)
           }}
         />
       </main>
@@ -476,7 +444,8 @@ function BarreEtat({
     ecrits += m.ecrits
     cible += m.cible
   }
-  const parStatut = new Map(STATUTS.map((s) => [s, plan.sections.filter((x) => x.statut === s).length]))
+  // Les pages blanches n'ont rien à écrire : elles ne comptent dans aucun statut.
+  const parStatut = new Map(STATUTS.map((s) => [s, plan.sections.filter((x) => x.type !== 'blanche' && x.statut === s).length]))
 
   return (
     <div className="barre-etat">

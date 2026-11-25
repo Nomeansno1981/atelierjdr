@@ -56,7 +56,19 @@ export interface SectionHorsTexte extends SectionCommune {
   type: 'hors-texte'
 }
 
-export type Section = SectionTexte | SectionHorsTexte
+/** Page laissée blanche à dessein (les blanches de parité, elles, sont calculées). */
+export interface SectionBlanche extends SectionCommune {
+  type: 'blanche'
+}
+
+export type Section = SectionTexte | SectionHorsTexte | SectionBlanche
+
+export const TITRE_PAGE_BLANCHE = 'Page blanche'
+
+/** Une section sans texte : hors-texte ou page blanche. */
+export function sansTexte(s: Section): s is SectionHorsTexte | SectionBlanche {
+  return s.type !== 'texte'
+}
 
 export interface ElementCorbeille {
   section: Section
@@ -230,7 +242,7 @@ function lireSection(
   if (id !== null && !MOTIF_ID.test(id)) {
     v.signaler(`${chemin}.id : 6 caractères parmi a-z et 0-9 attendus (trouvé : « ${id} »)`)
   }
-  const type = v.choix(o.type, `${chemin}.type`, ['texte', 'hors-texte'] as const)
+  const type = v.choix(o.type, `${chemin}.type`, ['texte', 'hors-texte', 'blanche'] as const)
   const titre = v.chaine(o.titre, `${chemin}.titre`)
   const partie = v.chaine(o.partie, `${chemin}.partie`)
   const statut = v.choix(o.statut, `${chemin}.statut`, STATUTS)
@@ -252,10 +264,11 @@ function lireSection(
   }
   const commun = { id, titre, partie, statut, pages, debut, resume }
 
-  if (type === 'hors-texte') {
-    if (o.fichier !== undefined) v.signaler(`${chemin} : un hors-texte n’a pas de fichier`)
+  if (type === 'hors-texte' || type === 'blanche') {
+    const nom = type === 'blanche' ? 'une page blanche' : 'un hors-texte'
+    if (o.fichier !== undefined) v.signaler(`${chemin} : ${nom} n’a pas de fichier`)
     if (o.motsParPage !== undefined && o.motsParPage !== null) {
-      v.signaler(`${chemin} : un hors-texte n’a pas de mots par page`)
+      v.signaler(`${chemin} : ${nom} n’a pas de mots par page`)
     }
     return { type, ...commun }
   }
@@ -376,7 +389,7 @@ export function serialiserPlan(plan: Plan): string {
 function ordonnerSection(s: Section): Record<string, unknown> {
   const debut = { id: s.id, type: s.type, titre: s.titre }
   const fin = { partie: s.partie, statut: s.statut, pages: s.pages, debut: s.debut, resume: s.resume }
-  if (s.type === 'hors-texte') return { ...debut, ...fin }
+  if (s.type !== 'texte') return { ...debut, ...fin }
   return { ...debut, fichier: s.fichier, ...fin, motsParPage: s.motsParPage }
 }
 

@@ -145,3 +145,52 @@ describe('opérations', () => {
     expect(nouvelId(plan, () => suite.shift() ?? 0)).toBe('ssssss')
   })
 })
+
+describe('déplacer : la partie suit la place', () => {
+  const AVANT_PROPOS = 'v4n8hs'
+  const CREER = 's8q1lz'
+  const partie = (p: Plan, id: string) => p.sections.find((s) => s.id === id)?.partie
+
+  it('au milieu d’une autre partie, la section en prend la partie', () => {
+    // Avant-propos entre « Créer son personnage » et « Le heurt » (Les règles).
+    const plan = deplacer(exemple(), AVANT_PROPOS, 3)
+    expect(ids(plan).slice(2, 5)).toEqual([CREER, AVANT_PROPOS, LE_HEURT])
+    expect(partie(plan, AVANT_PROPOS)).toBe('regles')
+  })
+
+  it('à la frontière de sa propre partie, elle garde la sienne', () => {
+    // « Le heurt » remonté en tête des règles, entre « Qu’est-ce que
+    // Katastrophê ? » (Présentation) et « Créer son personnage » (Les règles).
+    const plan = deplacer(exemple(), LE_HEURT, 3)
+    expect(ids(plan).slice(2, 5)).toEqual(['c3w7mj', LE_HEURT, CREER])
+    expect(partie(plan, LE_HEURT)).toBe('regles')
+  })
+
+  it('à la frontière de deux autres parties, elle prend celle de la précédente', () => {
+    // Lexique placé entre la Présentation et Les règles.
+    const plan = deplacer(exemple(), LEXIQUE, 3)
+    expect(partie(plan, LEXIQUE)).toBe('presentation')
+  })
+
+  it('en tête du livre, elle prend la partie de la section suivante', () => {
+    const plan = deplacer(exemple(), LEXIQUE, 0)
+    expect(partie(plan, LEXIQUE)).toBe('presentation')
+  })
+})
+
+describe('page blanche', () => {
+  it('se crée sans titre, sans fichier, d’emblée définitive', () => {
+    const plan = creerSection(exemple(), { type: 'blanche', titre: '', partie: 'presentation', pages: 1 }, 1, 'zzz111')
+    expect(plan.sections[1]).toEqual({
+      id: 'zzz111',
+      type: 'blanche',
+      titre: 'Page blanche',
+      partie: 'presentation',
+      statut: 'definitif',
+      pages: 1,
+      debut: 'indifferent',
+      resume: '',
+    })
+    expect(() => validerPlan(JSON.parse(serialiserPlan(plan)))).not.toThrow()
+  })
+})

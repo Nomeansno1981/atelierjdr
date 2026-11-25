@@ -39,7 +39,7 @@ function textesDe(plan: Plan, fichiers: Record<string, string>): Map<string, str
 
 test('lecture continue : titres comme à la compilation, hors-texte, repères, ouverture dans l’éditeur', async ({ page }) => {
   const { erreurs } = await ouvrir(page)
-  await outil(page, 'Lecture continue')
+  await page.getByRole('button', { name: 'Lecture', exact: true }).click()
   await expect(page).toHaveURL(/#\/lecture$/)
   const lecture = page.locator('main.lecture')
   await expect(lecture.locator('h1.lecture-partie')).toHaveText([
@@ -65,7 +65,7 @@ test('lecture continue : titres comme à la compilation, hors-texte, repères, o
 
 test('lecture continue : la table des matières mène à la section', async ({ page, isMobile }) => {
   await ouvrir(page)
-  await outil(page, 'Lecture continue')
+  await page.getByRole('button', { name: 'Lecture', exact: true }).click()
   if (isMobile) {
     await page.getByRole('button', { name: 'Sommaire' }).click()
     await page.getByRole('dialog', { name: 'Sommaire' }).getByRole('button', { name: 'Lexique' }).last().click()
@@ -86,7 +86,7 @@ test('le rendu est nettoyé : ni script, ni gestionnaire d’événement, ni lie
     '[lien](javascript:window.__piege=4)',
   ].join('\n')
   const { erreurs } = await ouvrir(page, { ...exemple, 'sections/les-consequences.md': piege })
-  await outil(page, 'Lecture continue')
+  await page.getByRole('button', { name: 'Lecture', exact: true }).click()
   const section = page.locator('#lecture-m6u4og')
   await expect(section).toContainText('Paragraphe')
   await expect(section.locator('script, img, [onclick], [onerror], [style]')).toHaveCount(0)

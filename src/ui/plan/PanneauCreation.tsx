@@ -22,7 +22,7 @@ export function PanneauCreation({ plan, index, creer, fermer }: Proprietes) {
 
   function envoyer(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (titre.trim() === '') return
+    if (titre.trim() === '' && type !== 'blanche') return
     creer({ type, titre, partie, pages: Math.max(1, Number.parseInt(pages, 10) || 1) })
   }
 
@@ -44,10 +44,26 @@ export function PanneauCreation({ plan, index, creer, fermer }: Proprietes) {
             />
             Hors-texte <span className="aide">(illustration, page de titre, fiche…)</span>
           </label>
+          <label>
+            <input
+              type="radio"
+              name="type"
+              checked={type === 'blanche'}
+              onChange={() => { setType('blanche') }}
+            />
+            Page blanche <span className="aide">(laissée blanche à dessein)</span>
+          </label>
         </fieldset>
 
         <label htmlFor={`${id}-titre`}>Titre</label>
-        <input id={`${id}-titre`} value={titre} onChange={(e) => { setTitre(e.target.value) }} required autoFocus />
+        <input
+          id={`${id}-titre`}
+          value={titre}
+          onChange={(e) => { setTitre(e.target.value) }}
+          required={type !== 'blanche'}
+          placeholder={type === 'blanche' ? 'Page blanche' : undefined}
+          autoFocus
+        />
 
         <div className="champs-2">
           <div>

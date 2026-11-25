@@ -97,7 +97,16 @@
 }
 
 .zoom {
+  display: inline-flex;
+}
+
+/* Zoom sur ordinateur seulement ; ailleurs, « Plan » le remplace. */
+.zoom .vue-zoom {
   display: none;
+}
+
+.zoom .vue-plan {
+  border-radius: var(--rayon) 0 0 var(--rayon);
 }
 
 .zoom button {
@@ -485,6 +494,18 @@
   border-right: 3px dashed var(--trait);
 }
 
+/* Page laissée blanche à dessein : hachurée comme les blanches automatiques. */
+.postit-blanche {
+  background-color: var(--page);
+  background-image: repeating-linear-gradient(45deg, transparent 0 7px, var(--hachure) 7px 9px);
+  color: var(--texte-doux);
+}
+
+.postit-blanche .postit-titre {
+  font-style: italic;
+  font-weight: 500;
+}
+
 /* Place provisoire pendant un déplacement. */
 .postit-place {
   padding: 8px;
@@ -541,8 +562,13 @@
 }
 
 @media (min-width: 1024px) {
-  .zoom {
+  .zoom .vue-zoom {
     display: inline-flex;
+    align-items: center;
+  }
+
+  .zoom .vue-plan {
+    display: none;
   }
 
   .planches {

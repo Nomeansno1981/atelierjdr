@@ -70,18 +70,21 @@ Le plan est un chemin de fer : chaque section est un post-it qui couvre autant d
 | Déplacer une section | Glisser le post-it | Appui long (un tiers de seconde), puis glisser | Espace, flèches, puis Espace ou Entrée (Échap annule) |
 | Modifier | Bouton « … » | Bouton « … » | Tab jusqu’au bouton, Entrée |
 | Changer le nombre de pages | Boutons − et + | Boutons − et + | |
-| Créer une section | « + » au bord gauche d’un post-it (avant lui) ou « Nouvelle section » en fin de grille | idem | |
+| Créer une section, un hors-texte ou une page blanche | « + » au bord gauche d’un post-it (avant lui) ou « Nouvelle section » en fin de grille | idem | |
 | Annuler, rétablir | Boutons en haut à gauche | idem | Cmd/Ctrl+Z, Cmd/Ctrl+Maj+Z |
 
+- **Partie** : une section déplacée parmi les sections d’une autre partie rejoint cette partie (celle de la section qui la précède). Posée à la frontière entre deux parties, elle garde la sienne si c’est l’une des deux. Le panneau « … » permet toujours de choisir la partie à la main.
+- **Page blanche** voulue (avant une ouverture de partie, par exemple) : « Page blanche » dans la création. Elle se déplace et se dimensionne comme un post-it, n’a ni texte ni statut, et figure dans la compilation sous la forme `<!-- PAGE BLANCHE (p. 2) -->`.
+- **Vue** (en haut) : sur ordinateur, Compact, Normal, Détaillé ou Lecture ; sur tablette et téléphone, Plan ou Lecture.
 - **Supprimer** se fait depuis le panneau « … » : la section part dans la corbeille, et un bandeau « Annuler » reste 10 secondes. La corbeille (icône en haut à droite) permet de restaurer une section à sa place. La vider demande confirmation et ne s’annule pas ; les fichiers restent dans l’historique GitHub.
 - **Couleur** du post-it : son statut (gris à écrire, jaune premier jet, bleu relu, vert définitif). **Étiquette** en haut : sa partie.
 - **Jauge** : mots écrits sur la cible (pages × mots par page) ; elle vire au rouge au-delà de 110 %.
-- **Pages hachurées** : en gris, une page blanche insérée automatiquement ; en rouge, une page au-delà du nombre de pages prévu.
+- **Pages hachurées** : en gris, une page blanche (insérée automatiquement si elle n’a pas d’étiquette, voulue si c’est un post-it « Page blanche ») ; en rouge, une page au-delà du nombre de pages prévu.
 - **Réglages** (icône à curseurs) : titre, nombre de pages, mots par page, parties. La déconnexion s’y trouve aussi.
 - **Enregistrement** : chaque modification est écrite sur l’appareil immédiatement, puis envoyée à GitHub environ 5 secondes après la dernière, en un seul commit. L’indicateur en haut à droite dit où elle en est.
 - **Plusieurs appareils** : si le plan a aussi été modifié sur un autre appareil, les deux versions sont fusionnées automatiquement, section par section et champ par champ. Si le même champ a changé des deux côtés (le statut d’une même section, par exemple), la modification la plus récente l’emporte, et un bandeau détaille ce qui a été remplacé. L’autre version reste dans l’historique GitHub.
 
-Toucher une section de texte ouvre l’éditeur ; toucher un hors-texte ouvre son panneau.
+Toucher une section de texte ouvre l’éditeur ; toucher un hors-texte ou une page blanche ouvre son panneau.
 
 ## Écrire
 
@@ -121,9 +124,9 @@ Pendant la frappe, l’éditeur applique la convention du projet :
 
 ## Lire, compiler, exporter
 
-Ces trois fonctions sont dans le menu **Outils** du plan.
+La lecture s’ouvre par le bouton « Lecture » du sélecteur de vue, en haut du plan ; compiler et exporter sont dans le menu **Outils** du plan.
 
-- **Lecture continue** : toutes les sections à la suite, mises en page pour la lecture, avec les titres de parties et de sections placés comme à la compilation, les hors-texte en encadré et, sous chaque titre, ses pages et ses mots. La table des matières (à gauche, ou « Sommaire » sur téléphone) mène à une section ; toucher le titre d’une section l’ouvre dans l’éditeur. Une case masque les sections « à écrire » encore vides. Lecture seule.
+- **Lecture** : toutes les sections à la suite, mises en page pour la lecture, avec les titres de parties et de sections placés comme à la compilation, les hors-texte en encadré et, sous chaque titre, ses pages et ses mots. La table des matières (à gauche, ou « Sommaire » sur téléphone) mène à une section ; toucher le titre d’une section l’ouvre dans l’éditeur. Une case masque les sections « à écrire » encore vides. Lecture seule.
 - **Compiler** produit un seul fichier Markdown pour le pipeline Python puis InDesign. Il propose le numéro de version suivant, laisse inclure ou exclure les sections vides et ajouter des repères de pages, puis télécharge le fichier ou l’enregistre dans `compilations/` du dépôt. Le nom suit le modèle `Katastrophe__v{n}.md`, modifiable dans les Réglages.
 - **Exporter le manuscrit (.zip)** télécharge `plan.json`, les sections, la corbeille et le script de compilation, depuis l’appareil : cela marche même si GitHub ne répond pas, et l’archive contient aussi les modifications pas encore envoyées.
 
@@ -133,6 +136,8 @@ Ces trois fonctions sont dans le menu **Outils** du plan.
 # Partie I — Présentation
 
 <!-- HORS-TEXTE : Page de titre (p. 1) -->
+
+<!-- PAGE BLANCHE (p. 2) -->
 
 ## Avant-propos
 

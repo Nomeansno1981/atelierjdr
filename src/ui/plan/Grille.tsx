@@ -9,7 +9,7 @@ import { getEventCoordinates } from '@dnd-kit/utilities'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { cibleInsertion, type PositionPointeur } from '../../domaine/glisser'
 import { construireGrille, type PageGrille, type Planche } from '../../domaine/grille'
-import { ordreAvecDeplacement } from '../../domaine/operations'
+import { deplacer as deplacerSection, ordreAvecDeplacement } from '../../domaine/operations'
 import { paginer, type Pagination } from '../../domaine/pagination'
 import type { Plan, Section } from '../../domaine/plan'
 import { numerosDesParties } from '../../domaine/romains'
@@ -51,13 +51,14 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
   const [glisse, setGlisse] = useState<Glissement | null>(null)
   const [annonce, setAnnonce] = useState('')
 
+  // Aperçu : la section à sa place provisoire, avec la partie qu'elle y prendrait.
   const ordre = useMemo(
-    () => (glisse ? ordreAvecDeplacement(plan.sections, glisse.id, glisse.index) : plan.sections),
-    [plan.sections, glisse],
+    () => (glisse ? deplacerSection(plan, glisse.id, glisse.index).sections : plan.sections),
+    [plan, glisse],
   )
   const pagination = useMemo(() => paginer(ordre, plan.livre.premierePage), [ordre, plan.livre.premierePage])
   const planches = useMemo(() => construireGrille(ordre, pagination, plan.livre), [ordre, pagination, plan.livre])
-  const sections = useMemo(() => new Map(plan.sections.map((s) => [s.id, s])), [plan.sections])
+  const sections = useMemo(() => new Map(ordre.map((s) => [s.id, s])), [ordre])
   const etiquettes = useMemo(() => {
     const numeros = numerosDesParties(plan.parties)
     return new Map(

@@ -51,7 +51,7 @@ export function PostIt({ section, segment, emplacement, etiquettePartie, mots, c
     : ''
   const libelle = [
     section.titre,
-    section.type === 'hors-texte' ? 'hors-texte' : null,
+    section.type === 'hors-texte' ? 'hors-texte' : section.type === 'blanche' ? 'page blanche' : null,
     LIBELLES_STATUT[section.statut],
     pages,
     mots ? `${formaterNombre(mots.ecrits)} mots sur ${formaterNombre(mots.cible)}` : null,
@@ -62,6 +62,7 @@ export function PostIt({ section, segment, emplacement, etiquettePartie, mots, c
   const classes = [
     'postit',
     `statut-${section.statut}`,
+    section.type === 'blanche' ? 'postit-blanche' : '',
     segment.suite ? 'postit-suite' : '',
     segment.continue ? 'postit-continue' : '',
     place ? 'postit-place' : '',

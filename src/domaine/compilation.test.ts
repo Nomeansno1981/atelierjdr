@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { lireExemple } from '../test/exemple'
 import { compiler, estVide, modeleValide, nomCompilation, versionSuivante, type OptionsCompilation } from './compilation'
-import { creerSection, deplacer } from './operations'
+import { creerSection, deplacer, ordreAvecDeplacement } from './operations'
 import { lirePlan, serialiserPlan, type Plan } from './plan'
 
 const exemple = lireExemple()
@@ -69,7 +69,8 @@ describe('compiler', () => {
   })
 
   it('une partie qui revient après une autre a de nouveau son titre', () => {
-    const plan = deplacer(planExemple(), 'l7k3pw', 3)
+    // Construit directement : un déplacement rattacherait le Lexique à sa nouvelle partie.
+    const plan = { ...planExemple(), sections: ordreAvecDeplacement(planExemple().sections, 'l7k3pw', 3) }
     const titres = compiler(plan, textesDe(plan, exemple), TOUT).split('\n').filter((l) => l.startsWith('# '))
     expect(titres).toEqual([`# Partie I ${TIRET} Présentation`, '# Lexique', `# Partie II ${TIRET} Les règles`])
   })
@@ -130,6 +131,7 @@ describe('outils/compiler.py donne exactement le même fichier que le site', () 
   plan = creerSection(plan, { type: 'texte', titre: 'Insécables', partie: 'regles', pages: 2 }, 5, 'nbs001')
   plan = creerSection(plan, { type: 'texte', titre: 'Absent', partie: 'lexique', pages: 1 }, 99, 'abs001')
   plan = deplacer(plan, 'p2m9xd', 0)
+  plan = creerSection(plan, { type: 'blanche', titre: '', partie: 'presentation', pages: 2 }, 2, 'bla001')
   const fichiers: Record<string, string> = {
     ...exemple,
     'plan.json': serialiserPlan(plan),
@@ -164,5 +166,13 @@ describe('outils/compiler.py donne exactement le même fichier que le site', () 
     const chemin = execFileSync('python3', [script, '--depot', racine], { encoding: 'utf8' }).trim()
     expect(chemin).toBe(join(racine, 'compilations', 'K_5.md'))
     expect(readFileSync(chemin, 'utf8')).toBe(compiler(avecModele, textesDe(avecModele, fichiers), TOUT))
+  })
+})
+
+describe('page blanche posée à la main', () => {
+  it('est marquée dans la compilation, avec ses pages', () => {
+    const plan = creerSection(planExemple(), { type: 'blanche', titre: '', partie: 'presentation', pages: 1 }, 1, 'bla001')
+    const sortie = compiler(plan, textesDe(plan, exemple), TOUT)
+    expect(sortie).toContain('<!-- HORS-TEXTE : Page de titre (p. 1) -->\n\n<!-- PAGE BLANCHE (p. 2) -->\n\n## Avant-propos')
   })
 })
