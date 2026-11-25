@@ -1,18 +1,24 @@
 import { useId, useState, type SubmitEvent } from 'react'
+import type { NouveauLivre } from '../../domaine/operations'
+import type { DepotACreer, ResultatOuverture } from '../../etat/atelier'
 import { nomComplet, type Depot } from '../../github/client'
+import { FormulaireNouveauLivre } from '../livres/FormulaireNouveauLivre'
 
 interface Proprietes {
   depotConnu: Depot | null
   /** Message affiché à l'arrivée, par exemple après un jeton révoqué. */
   message: string | null
-  seConnecter: (jeton: string, depot: string) => Promise<string | null>
+  seConnecter: (jeton: string, depot: string) => Promise<ResultatOuverture>
+  creerLivre: (jeton: string, cible: DepotACreer, livre: NouveauLivre) => Promise<string | null>
 }
 
-export function EcranConnexion({ depotConnu, message, seConnecter }: Proprietes) {
+export function EcranConnexion({ depotConnu, message, seConnecter, creerLivre }: Proprietes) {
   const [jeton, setJeton] = useState('')
   const [depot, setDepot] = useState(depotConnu ? nomComplet(depotConnu) : '')
   const [erreur, setErreur] = useState<string | null>(null)
   const [enCours, setEnCours] = useState(false)
+  // Dépôt accessible mais sans manuscrit : on propose de le créer.
+  const [aCreer, setACreer] = useState<DepotACreer | null>(null)
   const idJeton = useId()
   const idDepot = useId()
   const idAide = useId()
@@ -21,12 +27,28 @@ export function EcranConnexion({ depotConnu, message, seConnecter }: Proprietes)
     e.preventDefault()
     setEnCours(true)
     setErreur(null)
-    const probleme = await seConnecter(jeton, depot)
+    const resultat = await seConnecter(jeton, depot)
     // En cas de succès, ce composant disparaît : inutile de le remettre à jour.
-    if (probleme !== null) {
-      setErreur(probleme)
-      setEnCours(false)
-    }
+    if (resultat.etat === 'ouvert') return
+    setEnCours(false)
+    if (resultat.etat === 'erreur') setErreur(resultat.message)
+    else setACreer(resultat)
+  }
+
+  if (aCreer) {
+    return (
+      <main className="ecran-centre connexion">
+        <h1>Nouveau livre</h1>
+        <FormulaireNouveauLivre
+          cible={aCreer}
+          motsParPage={350}
+          creer={(livre) => creerLivre(jeton, aCreer, livre)}
+          annuler={() => {
+            setACreer(null)
+          }}
+        />
+      </main>
+    )
   }
 
   return (

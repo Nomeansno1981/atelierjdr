@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { lireExemple } from '../test/exemple'
 import { cibleInsertion } from './glisser'
 import { construireGrille } from './grille'
-import { ordreAvecDeplacement } from './operations'
 import { coteDeLaPage, paginer } from './pagination'
 import { lirePlan, type Debut } from './plan'
 
@@ -115,42 +114,53 @@ describe('construireGrille', () => {
 describe('cibleInsertion', () => {
   // a(1) b(3) c(1) d(1) → a:1, b:2-4, c:5, d:6
   const ordre = [s('a', 1), s('b', 3), s('c', 1), s('d', 1)]
+  const pagination = paginer(ordre, 'droite')
 
-  function cible(idGlisse: string, index: number, page: number, fraction = 0.5) {
-    const apercu = ordreAvecDeplacement(ordre, idGlisse, index)
-    return cibleInsertion(apercu, paginer(apercu, 'droite'), idGlisse, { type: 'page', page, fraction })
+  function cible(idGlisse: string, page: number, fraction = 0.5) {
+    return cibleInsertion(ordre, pagination, idGlisse, { type: 'page', page, fraction })
   }
 
-  it('reste en place au-dessus de sa propre position', () => {
-    expect(cible('a', 0, 1)).toBe(0)
+  it('reste en place au-dessus de sa propre position, sans ligne', () => {
+    expect(cible('a', 1)).toEqual({ index: 0, repere: null })
+    expect(cible('b', 3)).toEqual({ index: 1, repere: null })
   })
 
-  it('s’insère avant une section si l’on est sur sa première moitié', () => {
-    // d glissé en fin : a:1, b:2-4, c:5, d:6. Pointeur en page 2 (début de b).
-    expect(cible('d', 3, 2, 0.1)).toBe(1)
+  it('s’insère avant une section si l’on est sur sa première moitié : ligne à son bord gauche', () => {
+    expect(cible('d', 2, 0.1)).toEqual({ index: 1, repere: { id: 'b', cote: 'avant' } })
   })
 
-  it('s’insère après une section si l’on est sur sa seconde moitié', () => {
-    expect(cible('d', 3, 4, 0.5)).toBe(2)
+  it('s’insère après une section si l’on est sur sa seconde moitié : ligne à son bord droit', () => {
+    expect(cible('d', 4, 0.5)).toEqual({ index: 2, repere: { id: 'b', cote: 'apres' } })
   })
 
-  it('reste stable après le décalage (pas d’oscillation)', () => {
-    // a glissé sur la fin de b (page 4) → après b : ordre b, a, c, d.
-    const index = cible('a', 0, 4, 0.8)
-    expect(index).toBe(1)
-    // Dans le nouvel aperçu, b occupe 1-3 et a la page 4 : on reste à 1.
-    expect(cible('a', index, 4, 0.8)).toBe(1)
+  it('juste avant ou juste après sa propre place : rien ne change, pas de ligne', () => {
+    // b est entre a et c : fin de a ou début de c reviennent à ne pas bouger.
+    expect(cible('b', 1, 0.8)).toEqual({ index: 1, repere: null })
+    expect(cible('b', 5, 0.2)).toEqual({ index: 1, repere: null })
   })
 
-  it('va en fin de grille sur une page libre', () => {
-    const apercu = ordreAvecDeplacement(ordre, 'a', 0)
-    expect(cibleInsertion(apercu, paginer(apercu, 'droite'), 'a', { type: 'fin' })).toBe(3)
+  it('la grille ne bouge pas : la cible ne dépend que du pointeur', () => {
+    // a glissé sur la fin de b (page 4) → après b, à chaque mouvement.
+    expect(cible('a', 4, 0.8)).toEqual({ index: 1, repere: { id: 'b', cote: 'apres' } })
+    expect(cible('a', 4, 0.9)).toEqual({ index: 1, repere: { id: 'b', cote: 'apres' } })
+  })
+
+  it('va en fin de grille sur une page libre : ligne après la dernière section', () => {
+    expect(cibleInsertion(ordre, pagination, 'a', { type: 'fin' })).toEqual({
+      index: 3,
+      repere: { id: 'd', cote: 'apres' },
+    })
+    // La dernière section déjà en fin : rien ne change.
+    expect(cibleInsertion(ordre, pagination, 'd', { type: 'fin' })).toEqual({ index: 3, repere: null })
   })
 
   it('une page blanche vaut le début de la section qui la suit', () => {
     const avecBlanche = [s('a', 2), s('b', 2, 'gauche'), s('c', 1)]
     // a:1-2, blanche 3, b:4-5, c:6 ; on glisse c au-dessus de la blanche.
     const p = paginer(avecBlanche, 'droite')
-    expect(cibleInsertion(avecBlanche, p, 'c', { type: 'page', page: 3, fraction: 0.5 })).toBe(1)
+    expect(cibleInsertion(avecBlanche, p, 'c', { type: 'page', page: 3, fraction: 0.5 })).toEqual({
+      index: 1,
+      repere: { id: 'b', cote: 'avant' },
+    })
   })
 })

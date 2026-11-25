@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { Atelier, EtatOuvert } from '../etat/atelier'
 import { nomComplet } from '../github/client'
 import { FiletErreur } from './commun/FiletErreur'
 import { IndicateurSynchro } from './commun/IndicateurSynchro'
+import { PanneauLivres } from './livres/PanneauLivres'
 import { ModePlan } from './plan/ModePlan'
 import { useRoute } from './routes'
 
@@ -21,6 +22,7 @@ interface Proprietes {
 export function EcranAtelier({ atelier, etat }: Proprietes) {
   const { manuscrit, synchro, connexion } = etat
   const [route, naviguer] = useRoute()
+  const [livres, setLivres] = useState(false)
   // Une fois le plan affiché, l'éditeur se charge en arrière-plan.
   useEffect(() => {
     const minuterie = setTimeout(() => void chargerRedaction().catch(() => undefined), 1000)
@@ -61,7 +63,7 @@ export function EcranAtelier({ atelier, etat }: Proprietes) {
 
   function confirmerDeconnexion() {
     const ok = window.confirm(
-      'Se déconnecter efface le jeton et la copie du manuscrit sur cet appareil. Le manuscrit sur GitHub n’est pas touché. Continuer ?',
+      'Se déconnecter efface le jeton et la copie de tous vos livres sur cet appareil. Les manuscrits sur GitHub ne sont pas touchés. Continuer ?',
     )
     if (ok) void atelier.seDeconnecter()
   }
@@ -74,6 +76,14 @@ export function EcranAtelier({ atelier, etat }: Proprietes) {
           <IndicateurSynchro synchro={synchro} enAttente={etat.enAttente} conflit={false} />
         </div>
         <div className="barre-outils">
+          <button
+            type="button"
+            onClick={() => {
+              setLivres(true)
+            }}
+          >
+            Livres
+          </button>
           <span className="espace" />
           <button
             type="button"
@@ -107,6 +117,15 @@ export function EcranAtelier({ atelier, etat }: Proprietes) {
           </p>
         )}
       </main>
+      {livres && (
+        <PanneauLivres
+          atelier={atelier}
+          etat={etat}
+          fermer={() => {
+            setLivres(false)
+          }}
+        />
+      )}
     </div>
   )
 }

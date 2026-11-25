@@ -71,7 +71,7 @@ export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDe
         ? `\n\nAttention : ${enAttente} modification${enAttente > 1 ? 's n’ont' : ' n’a'} pas encore été envoyée${enAttente > 1 ? 's' : ''} à GitHub et ${enAttente > 1 ? 'seront perdues' : 'sera perdue'}.`
         : ''
     const ok = window.confirm(
-      `Se déconnecter efface le jeton et la copie du manuscrit sur cet appareil. Le manuscrit sur GitHub n’est pas touché.${perte}\n\nContinuer ?`,
+      `Se déconnecter efface le jeton et la copie de tous vos livres sur cet appareil. Les manuscrits sur GitHub ne sont pas touchés.${perte}\n\nContinuer ?`,
     )
     if (ok) seDeconnecter()
   }

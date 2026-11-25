@@ -1,8 +1,8 @@
 # Atelier
 
-Outil personnel pour planifier et rédiger le manuel de *Katastrophê* : un chemin de fer (le plan du livre, page par page) et un éditeur Markdown. Le site est statique, hébergé sur GitHub Pages ; le manuscrit vit dans un dépôt GitHub privé, en fichiers Markdown lisibles sans l’Atelier.
+Outil personnel pour planifier et rédiger le manuel de *Katastrophê*, et d’autres livres ensuite : un chemin de fer (le plan du livre, page par page) et un éditeur Markdown. Le site est statique, hébergé sur GitHub Pages ; le manuscrit vit dans un dépôt GitHub privé, en fichiers Markdown lisibles sans l’Atelier.
 
-> **État : version 1 (jalon 6, robustesse).** Plan, éditeur, typographie, lecture continue, compilation (site et script Python identiques), export .zip, fusion et conflits entre appareils, installation sur l’écran d’accueil.
+> **État : version 1.2.** Plan, éditeur, typographie, lecture continue, compilation (site et script Python identiques), export .zip, fusion et conflits entre appareils, installation sur l’écran d’accueil, plusieurs livres.
 
 ## Les deux dépôts
 
@@ -11,14 +11,15 @@ Outil personnel pour planifier et rédiger le manuel de *Katastrophê* : un chem
 | `atelier` | Ce code. GitHub Pages le publie automatiquement. | Public (aucun texte du manuel) |
 | `katastrophe` | Le manuscrit : `plan.json` et `sections/*.md` | **Privé** |
 
+Chaque autre livre a son propre dépôt privé, sur le même modèle (voir « Plusieurs livres »).
+
 ### 1. Créer le dépôt du manuscrit (`katastrophe`)
 
 1. Sur GitHub, cliquez sur **+** en haut à droite, puis **New repository**.
 2. Nom : `katastrophe`. Visibilité : **Private**.
-3. Cochez **Add a README file**. C’est indispensable : l’API qu’utilise l’Atelier ne sait pas écrire dans un dépôt entièrement vide.
-4. Cliquez sur **Create repository**.
+3. Cliquez sur **Create repository**. Le dépôt peut rester vide : à la première connexion, l’Atelier propose d’y créer le manuscrit (titre, nombre de pages, mots par page, parties).
 
-Pour essayer l’Atelier avec le manuscrit d’exemple, copiez-y le contenu du dossier `exemple/` de ce dépôt (le fichier `plan.json` et le dossier `sections/`), soit :
+Pour essayer plutôt l’Atelier avec le manuscrit d’exemple, cochez **Add a README file** à la création, puis copiez-y le contenu du dossier `exemple/` de ce dépôt (le fichier `plan.json` et le dossier `sections/`), soit :
 
 - **dans le navigateur** : sur la page du dépôt `katastrophe`, **Add file → Upload files**, puis glissez `plan.json` et le dossier `sections` ; validez avec **Commit changes** ;
 - **en ligne de commande**, depuis le dossier qui contient le clone d’`atelier` :
@@ -46,7 +47,7 @@ Le jeton est la clé qui permet au site de lire et d’écrire le manuscrit. Il 
 5. **Permissions** → **Repository permissions** → **Contents** : **Read and write**. (La permission *Metadata* en lecture s’ajoute d’elle-même.) Ne donnez aucune autre permission.
 6. **Generate token**, puis copiez le jeton (il commence par `github_pat_`). GitHub ne le montrera plus.
 
-Le jeton est saisi une fois par appareil et ne quitte jamais l’appareil. Ne le mettez jamais dans un fichier du dépôt.
+Le jeton est saisi une fois par appareil et ne quitte jamais l’appareil. Ne le mettez jamais dans un fichier du dépôt. Pour un autre livre, inutile d’en créer un deuxième : ajoutez son dépôt à celui-ci (voir « Plusieurs livres »).
 
 ### 3. Publier le site (`atelier`)
 
@@ -59,7 +60,22 @@ Le site ne contient aucun texte du manuel : sans jeton, il n’affiche que l’�
 
 ### 4. Se connecter
 
-Ouvrez le site, saisissez `VOTRE-NOM/katastrophe` et le jeton. La liste des sections s’affiche. Une copie du manuscrit est gardée sur l’appareil : si GitHub ne répond pas, le site affiche cette copie.
+Ouvrez le site, saisissez `VOTRE-NOM/katastrophe` et le jeton. La liste des sections s’affiche (ou, si le dépôt est vide, le formulaire de création du livre). Une copie du manuscrit est gardée sur l’appareil : si GitHub ne répond pas, le site affiche cette copie.
+
+## Plusieurs livres
+
+Le titre du livre, en haut du plan, ouvre la liste des **livres** de l’appareil.
+
+- **Passer à un autre livre** : touchez-le. Ce qui attend d’être envoyé part d’abord vers GitHub ; sans réseau, les modifications restent sur l’appareil, rangées avec leur livre, et partiront à sa prochaine ouverture. Au lancement suivant, l’Atelier rouvre le dernier livre ouvert.
+- **Ajouter un livre** dont le dépôt existe déjà : saisissez son nom (`VOTRE-NOM/autre-livre`), puis **Ajouter**.
+- **Commencer un nouveau livre** :
+  1. créez un dépôt **privé** sur GitHub (vide, sans README) ;
+  2. ajoutez-le au jeton de l’Atelier, sans en créer un autre : **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens**, ouvrez le jeton, modifiez **Repository access** pour y ajouter le dépôt, puis enregistrez ;
+  3. dans l’Atelier, **Ajouter** ce dépôt : un formulaire demande le titre, le nombre de pages, les mots par page et les parties, puis crée `plan.json`. Les règles typographiques sont reprises du livre ouvert, et le nom des compilations est tiré du titre (`Les_Ombres__v{n}.md`, modifiable dans les Réglages).
+- **Retirer** un livre efface sa copie sur l’appareil (le dépôt GitHub n’est pas touché). Le livre ouvert ne se retire pas.
+- **Se déconnecter** (Réglages) efface le jeton et la copie de tous les livres de l’appareil.
+
+Chaque livre a son dépôt, son historique et ses compilations : on peut en partager un seul (avec une coautrice, un éditeur) sans donner accès aux autres.
 
 ## Utiliser le plan
 
@@ -73,6 +89,7 @@ Le plan est un chemin de fer : chaque section est un post-it qui couvre autant d
 | Créer une section, un hors-texte ou une page blanche | « + » au bord gauche d’un post-it (avant lui) ou « Nouvelle section » en fin de grille | idem | |
 | Annuler, rétablir | Boutons en haut à gauche | idem | Cmd/Ctrl+Z, Cmd/Ctrl+Maj+Z |
 
+- **Pendant un glissement**, la grille ne bouge pas : le post-it reste estompé à sa place, une **ligne rouge** marque l’endroit où il s’insérera (au bord gauche d’un post-it si l’on vise sa première moitié, au bord droit sinon), et la silhouette annonce ses pages et sa partie d’arrivée. La grille se réorganise au dépôt. Au clavier, le post-it se déplace à sa place provisoire.
 - **Partie** : une section déplacée parmi les sections d’une autre partie rejoint cette partie (celle de la section qui la précède). Posée à la frontière entre deux parties, elle garde la sienne si c’est l’une des deux. Le panneau « … » permet toujours de choisir la partie à la main.
 - **Page blanche** voulue (avant une ouverture de partie, par exemple) : « Page blanche » dans la création. Elle se déplace et se dimensionne comme un post-it, n’a ni texte ni statut, et figure dans la compilation sous la forme `<!-- PAGE BLANCHE (p. 2) -->`.
 - **Vue** (en haut) : sur ordinateur, Compact, Normal, Détaillé ou Lecture ; sur tablette et téléphone, Plan ou Lecture.
@@ -177,7 +194,7 @@ L’installation protège aussi le cache : Safari peut effacer les données d’
 
 ## Sécurité
 
-- **Le jeton** ne quitte jamais l’appareil : ni dans le code, ni dans un dépôt. Sa portée se limite au dépôt du manuscrit et à la permission *Contents*.
+- **Le jeton** ne quitte jamais l’appareil : ni dans le code, ni dans un dépôt. Sa portée se limite aux dépôts de vos livres et à la permission *Contents* : il ne peut ni créer ni supprimer de dépôt.
 - **Politique de sécurité du contenu** stricte : scripts du site seulement, connexions vers `api.github.com` seulement, aucun script tiers, aucun CDN, aucune mesure d’audience. Les styles de l’éditeur passent par un jeton tiré à chaque publication du site.
 - **Le rendu Markdown** de la lecture continue est toujours nettoyé par DOMPurify.
 - **Site public, contenu privé** : sans jeton, le site n’affiche que l’écran de connexion, et il demande aux moteurs de recherche de ne pas l’indexer.
@@ -211,9 +228,9 @@ Les tests de bout en bout tournent sur la version construite, avec la politique 
 src/
 ├── domaine/     logique pure, sans interface, entièrement testée (plan, numéros romains…)
 ├── github/      accès à l’API GitHub et synchronisation
-├── stockage/    cache IndexedDB
+├── stockage/    cache IndexedDB : registre des livres, une base par livre
 ├── etat/        état de l’application, indépendant de React
-├── ui/          composants React
+├── ui/          composants React (plan, rédaction, sorties, livres, connexion)
 ├── styles/      CSS (thème clair et sombre)
 └── test/        outils de test (faux GitHub, manuscrit d’exemple)
 exemple/         manuscrit d’exemple : 10 sections, 3 parties, 2 hors-texte

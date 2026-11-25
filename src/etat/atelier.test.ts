@@ -1,11 +1,19 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it, vi } from 'vitest'
-import { changerPages, creerSection, deplacer, modifierSection, supprimerSection } from '../domaine/operations'
-import { lirePlan, serialiserPlan } from '../domaine/plan'
+import {
+  changerPages,
+  creerSection,
+  deplacer,
+  modifierSection,
+  nouveauPlan,
+  supprimerSection,
+} from '../domaine/operations'
+import { lirePlan, reglesTypo, serialiserPlan } from '../domaine/plan'
 import { lireExemple } from '../test/exemple'
 import { FauxGitHub } from '../test/fauxGitHub'
 import { shaBlobGit } from '../github/empreinte'
-import { Cache } from '../stockage/cache'
+import { openDB } from 'idb'
+import { baseDuProjet, Cache } from '../stockage/cache'
 import { Atelier, type EtatAtelier } from './atelier'
 
 let numero = 0
@@ -29,27 +37,41 @@ describe('Atelier', () => {
 
   it('refuse un jeton invalide sans quitter l’écran de connexion', async () => {
     const atelier = await demarrer(await FauxGitHub.creer(lireExemple()))
-    const message = await atelier.seConnecter('mauvais', 'autrice/katastrophe')
-    expect(message).toContain('GitHub refuse ce jeton')
+    const resultat = await atelier.seConnecter('mauvais', 'autrice/katastrophe')
+    expect(resultat).toMatchObject({ etat: 'erreur', message: expect.stringContaining('GitHub refuse ce jeton') as unknown })
     expect(atelier.lire().phase).toBe('connexion')
   })
 
   it('refuse un nom de dépôt mal formé', async () => {
     const atelier = await demarrer(await FauxGitHub.creer(lireExemple()))
-    expect(await atelier.seConnecter('jeton-valide', 'katastrophe')).toContain('Nom de dépôt invalide')
+    expect(await atelier.seConnecter('jeton-valide', 'katastrophe')).toMatchObject({
+      etat: 'erreur',
+      message: expect.stringContaining('Nom de dépôt invalide') as unknown,
+    })
   })
 
-  it('signale un dépôt vide dès la connexion', async () => {
-    const faux = await FauxGitHub.creer({})
-    faux.vide = true
+  it('dépôt vide : propose de créer le manuscrit, puis le crée et l’ouvre', async () => {
+    const faux = FauxGitHub.creerVide('roman')
     const atelier = await demarrer(faux)
-    expect(await atelier.seConnecter('jeton-valide', 'autrice/katastrophe')).toContain('Le dépôt est vide')
+    const resultat = await atelier.seConnecter('jeton-valide', 'autrice/roman')
+    expect(resultat).toEqual({ etat: 'a-creer', depot: { proprietaire: 'autrice', nom: 'roman' }, branche: 'main', vide: true })
+    expect(atelier.lire().phase).toBe('connexion')
+    if (resultat.etat !== 'a-creer') return
+
+    const livre = { titre: 'Roman', pagesTotal: 120, motsParPage: 300, parties: ['Un', 'Deux'] }
+    expect(await atelier.creerLivre('jeton-valide', resultat, livre)).toBeNull()
+    expect(faux.messages()).toEqual(['Création du manuscrit : Roman'])
+    expect(lirePlan(faux.fichiers()['plan.json'] ?? '')).toEqual(nouveauPlan(livre))
+    await atelier.synchroniser()
+    const etat = enAtelier(atelier.lire())
+    expect(etat.manuscrit?.plan?.livre.titre).toBe('Roman')
+    expect(etat.manuscrit?.plan?.parties.map((p) => p.titre)).toEqual(['Un', 'Deux'])
   })
 
   it('se connecte, synchronise et lit le plan', async () => {
     const faux = await FauxGitHub.creer(lireExemple())
     const atelier = await demarrer(faux)
-    expect(await atelier.seConnecter(' jeton-valide ', 'autrice/katastrophe')).toBeNull()
+    expect(await atelier.seConnecter(' jeton-valide ', 'autrice/katastrophe')).toEqual({ etat: 'ouvert' })
     await atelier.synchroniser()
     const etat = enAtelier(atelier.lire())
     expect(etat.synchro.etat).toBe('a-jour')
@@ -86,7 +108,7 @@ describe('Atelier', () => {
     expect(etat.phase === 'connexion' && etat.message).toContain('n’accepte plus votre jeton')
 
     // Le cache est toujours là : il s'affiche dès la reconnexion.
-    expect(await atelier.seConnecter('nouveau-jeton', 'autrice/katastrophe')).toBeNull()
+    expect(await atelier.seConnecter('nouveau-jeton', 'autrice/katastrophe')).toEqual({ etat: 'ouvert' })
     expect(enAtelier(atelier.lire()).manuscrit?.plan?.sections).toHaveLength(10)
   })
 
@@ -99,11 +121,25 @@ describe('Atelier', () => {
     expect(manuscrit?.erreurPlan).toContain('plan.json est invalide')
   })
 
-  it('signale l’absence de plan.json', async () => {
-    const atelier = await demarrer(await FauxGitHub.creer({ 'README.md': 'x' }))
-    await atelier.seConnecter('jeton-valide', 'autrice/katastrophe')
+  it('dépôt sans plan.json : propose de créer le manuscrit à côté des fichiers existants', async () => {
+    const faux = await FauxGitHub.creer({ 'README.md': 'x' })
+    const atelier = await demarrer(faux)
+    const resultat = await atelier.seConnecter('jeton-valide', 'autrice/katastrophe')
+    expect(resultat).toMatchObject({ etat: 'a-creer', vide: false })
+    if (resultat.etat !== 'a-creer') return
+    const livre = { titre: 'Essai', pagesTotal: 10, motsParPage: 300, parties: ['Seule'] }
+    expect(await atelier.creerLivre('jeton-valide', resultat, livre)).toBeNull()
+    expect(Object.keys(faux.fichiers()).sort()).toEqual(['README.md', 'plan.json'])
     await atelier.synchroniser()
-    expect(enAtelier(atelier.lire()).manuscrit?.erreurPlan).toContain('ne contient pas de plan.json')
+    expect(enAtelier(atelier.lire()).manuscrit?.plan?.livre.titre).toBe('Essai')
+  })
+
+  it('dépôt inaccessible au jeton : le message dit d’ajouter le dépôt au jeton', async () => {
+    const atelier = await demarrer(await FauxGitHub.creer(lireExemple()))
+    expect(await atelier.seConnecter('jeton-valide', 'autrice/inconnu')).toMatchObject({
+      etat: 'erreur',
+      message: expect.stringContaining('ajoutez ce dépôt à ceux du jeton') as unknown,
+    })
   })
 
   it('efface tout à la déconnexion', async () => {
@@ -237,7 +273,7 @@ describe('Atelier : opérations du plan', () => {
 
   /** Simule un brouillon d'une version antérieure, sans base commune connue. */
   async function brouillonSansBase(nomBase: string, plan: ReturnType<typeof lirePlan>) {
-    const cache = await Cache.ouvrir(nomBase)
+    const cache = await Cache.ouvrir(baseDuProjet(nomBase, { proprietaire: 'autrice', nom: 'katastrophe' }))
     await cache.enregistrerBrouillon({
       plan,
       shaPlanBase: await shaBlobGit(lireExemple()['plan.json'] ?? ''),
@@ -572,5 +608,160 @@ describe('Atelier : deux appareils', () => {
     const sauvegarde = enAtelier(b.atelier.lire()).manuscrit?.conflitsTexte.get(LE_HEURT) ?? ''
     expect(fichiers[sauvegarde]).toBe('Version de B.\n')
     expect(enAtelier(b.atelier.lire()).manuscrit?.textesDistants.get(LE_HEURT)).toBe('Version de A.\n')
+  })
+})
+
+describe('Atelier : plusieurs livres', () => {
+  const exemple = lireExemple()
+  const ROMAN = { proprietaire: 'autrice', nom: 'roman' }
+  const KATASTROPHE = { proprietaire: 'autrice', nom: 'katastrophe' }
+  const planRoman = () => {
+    const plan = lirePlan(exemple['plan.json'] ?? '')
+    return serialiserPlan({ ...plan, livre: { ...plan.livre, titre: 'Roman' } })
+  }
+
+  async function deuxLivres(options: { fetch?: (fauxs: FauxGitHub[]) => typeof fetch } = {}) {
+    const katastrophe = await FauxGitHub.creer(exemple)
+    const roman = await FauxGitHub.creer({ ...exemple, 'plan.json': planRoman() }, 'roman')
+    const fauxs = [katastrophe, roman]
+    const nomBase = `test-livres-${++numero}`
+    const atelier = new Atelier({ fetch: options.fetch?.(fauxs) ?? FauxGitHub.fetchPour(fauxs), nomBase, delaiEnvoiMs: 60_000 })
+    await atelier.demarrer()
+    await atelier.seConnecter('jeton-valide', 'autrice/katastrophe')
+    await atelier.synchroniser()
+    return { atelier, katastrophe, roman, nomBase }
+  }
+  const titre = (a: Atelier) => enAtelier(a.lire()).manuscrit?.plan?.livre.titre
+
+  it('ajoute un livre existant avec le même jeton, puis passe de l’un à l’autre', async () => {
+    const { atelier } = await deuxLivres()
+    expect(await atelier.ajouterLivre('autrice/roman')).toEqual({ etat: 'ouvert' })
+    await atelier.synchroniser()
+    expect(enAtelier(atelier.lire()).connexion.depot).toEqual(ROMAN)
+    expect(titre(atelier)).toBe('Roman')
+    expect(await atelier.resumerLivres()).toEqual([
+      { depot: KATASTROPHE, titre: 'Katastrophê', enAttente: 0, ouvert: false },
+      { depot: ROMAN, titre: 'Roman', enAttente: 0, ouvert: true },
+    ])
+
+    await atelier.changerDeLivre(KATASTROPHE)
+    expect(titre(atelier)).toBe('Katastrophê')
+  })
+
+  it('changer de livre envoie d’abord ce qui est en attente', async () => {
+    const { atelier, katastrophe } = await deuxLivres()
+    await atelier.ajouterLivre('autrice/roman')
+    await atelier.synchroniser()
+    atelier.modifierPlan((p) => changerPages(p, 'k7f3qa', 1), 'pages du Heurt')
+    await atelier.changerDeLivre(KATASTROPHE)
+    expect(katastrophe.messages()).toEqual(['Création'])
+    // Le commit est parti dans le dépôt du roman, pas dans l'autre.
+    const roman = enAtelier(atelier.lire())
+    expect(roman.connexion.depot).toEqual(KATASTROPHE)
+    expect(roman.enAttente).toBe(0)
+  })
+
+  it('hors ligne : les modifications restent dans leur livre et repartent à son retour', async () => {
+    let enLigne = true
+    const { atelier, katastrophe } = await deuxLivres({
+      fetch: (fauxs) => {
+        const f = FauxGitHub.fetchPour(fauxs)
+        return (entree, init) => (enLigne ? f(entree, init) : Promise.reject(new TypeError('Failed to fetch')))
+      },
+    })
+    await atelier.ajouterLivre('autrice/roman')
+    await atelier.synchroniser()
+    await atelier.changerDeLivre(KATASTROPHE)
+    enLigne = false
+    atelier.modifierTexte('k7f3qa', 'Écrit dans le train.\n')
+    await atelier.changerDeLivre(ROMAN)
+    expect(titre(atelier)).toBe('Roman')
+    expect(enAtelier(atelier.lire()).manuscrit?.textes.get('k7f3qa')).toBe(exemple['sections/le-heurt.md'])
+    expect(await atelier.resumerLivres()).toMatchObject([{ enAttente: 1 }, { enAttente: 0 }])
+
+    enLigne = true
+    await atelier.changerDeLivre(KATASTROPHE)
+    expect(enAtelier(atelier.lire()).manuscrit?.textes.get('k7f3qa')).toBe('Écrit dans le train.\n')
+    await atelier.envoyerMaintenant()
+    expect(katastrophe.fichiers()['sections/le-heurt.md']).toBe('Écrit dans le train.\n')
+  })
+
+  it('le livre ouvert est rouvert au démarrage suivant', async () => {
+    const { atelier, nomBase, katastrophe, roman } = await deuxLivres()
+    await atelier.ajouterLivre('autrice/roman')
+    await atelier.synchroniser()
+    const rouvert = new Atelier({ fetch: FauxGitHub.fetchPour([katastrophe, roman]), nomBase })
+    await rouvert.demarrer()
+    expect(enAtelier(rouvert.lire()).connexion.depot).toEqual(ROMAN)
+    expect(titre(rouvert)).toBe('Roman')
+  })
+
+  it('retire un livre de l’appareil sans toucher au dépôt', async () => {
+    const { atelier, roman } = await deuxLivres()
+    await atelier.ajouterLivre('autrice/roman')
+    await atelier.synchroniser()
+    await atelier.changerDeLivre(KATASTROPHE)
+    await atelier.retirerLivre(ROMAN)
+    expect((await atelier.resumerLivres()).map((l) => l.depot)).toEqual([KATASTROPHE])
+    expect(roman.fichiers()['plan.json']).toBe(planRoman())
+    // Le livre ouvert ne se retire pas.
+    await atelier.retirerLivre(KATASTROPHE)
+    expect(await atelier.resumerLivres()).toHaveLength(1)
+  })
+
+  it('crée un livre dans un dépôt vide depuis l’Atelier ouvert, avec la typographie du livre ouvert', async () => {
+    const katastrophe = await FauxGitHub.creer(exemple)
+    const vide = FauxGitHub.creerVide('nouveau')
+    const atelier = new Atelier({ fetch: FauxGitHub.fetchPour([katastrophe, vide]), nomBase: `test-livres-${++numero}` })
+    await atelier.demarrer()
+    await atelier.seConnecter('jeton-valide', 'autrice/katastrophe')
+    await atelier.synchroniser()
+    atelier.modifierPlan((p) => ({ ...p, reglages: { typographie: { ...reglesTypo(p), espaceFine: true } } }), 'réglages')
+    const typo = { ...reglesTypo(lirePlan(exemple['plan.json'] ?? '')), espaceFine: true }
+
+    const resultat = await atelier.ajouterLivre('autrice/nouveau')
+    expect(resultat).toMatchObject({ etat: 'a-creer', vide: true })
+    if (resultat.etat !== 'a-creer') return
+    expect(await atelier.creerLivre(null, resultat, { titre: 'Nouveau', pagesTotal: 50, motsParPage: 280, parties: ['A'] })).toBeNull()
+    await atelier.synchroniser()
+    expect(titre(atelier)).toBe('Nouveau')
+    expect(lirePlan(vide.fichiers()['plan.json'] ?? '').reglages?.typographie).toEqual(typo)
+    expect((await atelier.resumerLivres()).map((l) => l.titre)).toEqual(['Katastrophê', 'Nouveau'])
+  })
+
+  it('la déconnexion efface tous les livres de l’appareil', async () => {
+    const { atelier, nomBase, katastrophe, roman } = await deuxLivres()
+    await atelier.ajouterLivre('autrice/roman')
+    await atelier.synchroniser()
+    await atelier.seDeconnecter()
+    const rouvert = new Atelier({ fetch: FauxGitHub.fetchPour([katastrophe, roman]), nomBase })
+    await rouvert.demarrer()
+    expect(rouvert.lire()).toEqual({ phase: 'connexion', depot: null, message: null })
+    const bases = (await indexedDB.databases()).map((b) => b.name)
+    expect(bases.filter((n) => n?.startsWith(nomBase + ':'))).toEqual([])
+  })
+
+  it('un appareil connecté avant les livres multiples garde son manuscrit et ses brouillons', async () => {
+    const katastrophe = await FauxGitHub.creer(exemple)
+    const nomBase = `test-ancien-${++numero}`
+    // Ancien format : la connexion et le manuscrit dans la même base.
+    const ancien = await Cache.ouvrir(nomBase)
+    await ancien.enregistrerBrouillonTexte({
+      id: 'k7f3qa',
+      contenu: 'Pas encore envoyé.\n',
+      shaBase: await shaBlobGit(exemple['sections/le-heurt.md'] ?? ''),
+      revision: 1,
+      modifieLe: new Date().toISOString(),
+    })
+    ancien.fermer()
+    const db = await openDB(nomBase)
+    await db.put('appareil', { jeton: 'jeton-valide', depot: KATASTROPHE, branche: 'main' }, 'connexion')
+    db.close()
+
+    const atelier = new Atelier({ fetch: katastrophe.enFetch(), nomBase })
+    await atelier.demarrer()
+    expect(enAtelier(atelier.lire()).connexion.depot).toEqual(KATASTROPHE)
+    await atelier.envoyerMaintenant()
+    expect(katastrophe.fichiers()['sections/le-heurt.md']).toBe('Pas encore envoyé.\n')
   })
 })

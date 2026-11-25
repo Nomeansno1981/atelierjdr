@@ -24,7 +24,6 @@ interface Commit {
 
 export class FauxGitHub {
   readonly proprietaire = 'autrice'
-  readonly nom = 'katastrophe'
   readonly branche = 'main'
   jetonValide = 'jeton-valide'
   /** Simule un dépôt créé sans aucun commit. */
@@ -41,10 +40,41 @@ export class FauxGitHub {
   /** SHA du commit en tête de branche. */
   commit = ''
 
-  static async creer(fichiers: Record<string, string>): Promise<FauxGitHub> {
-    const faux = new FauxGitHub()
+  constructor(readonly nom = 'katastrophe') {}
+
+  static async creer(fichiers: Record<string, string>, nom = 'katastrophe'): Promise<FauxGitHub> {
+    const faux = new FauxGitHub(nom)
     await faux.publier(fichiers, 'Création')
     return faux
+  }
+
+  /** Un dépôt tout juste créé, sans aucun commit. */
+  static creerVide(nom: string): FauxGitHub {
+    const faux = new FauxGitHub(nom)
+    faux.vide = true
+    return faux
+  }
+
+  /** Chemin d'API de ce dépôt : « /repos/autrice/katastrophe ». */
+  get prefixe(): string {
+    return `/repos/${this.proprietaire}/${this.nom}`
+  }
+
+  /** Le faux dépôt auquel s'adresse une URL de l'API, parmi plusieurs (le premier par défaut). */
+  static destinataire<T extends FauxGitHub>(fauxs: readonly T[], url: string): T {
+    const chemin = new URL(url).pathname
+    const trouve = fauxs.find((f) => chemin === f.prefixe || chemin.startsWith(f.prefixe + '/'))
+    const premier = fauxs[0]
+    if (!premier) throw new Error('aucun faux dépôt')
+    return trouve ?? premier
+  }
+
+  /** Un `fetch` branché sur plusieurs faux dépôts, pour les tests unitaires. */
+  static fetchPour(fauxs: readonly FauxGitHub[]): typeof fetch {
+    return (entree, init) => {
+      const url = typeof entree === 'string' ? entree : entree instanceof URL ? entree.href : entree.url
+      return FauxGitHub.destinataire(fauxs, url).enFetch()(entree, init)
+    }
   }
 
   /** Remplace tout le contenu du dépôt par un nouveau commit (comme un autre appareil). */
@@ -90,13 +120,24 @@ export class FauxGitHub {
 
     if (autorisation !== `Bearer ${this.jetonValide}`) return { statut: 401, corps: { message: 'Bad credentials' } }
 
-    const prefixe = `/repos/${this.proprietaire}/${this.nom}`
+    const prefixe = this.prefixe
     if (chemin === prefixe && methode === 'GET') {
       return ok({ default_branch: this.branche, private: true })
     }
     if (!chemin.startsWith(prefixe + '/')) return introuvable()
-    if (this.vide) return { statut: 409, corps: { message: 'Git Repository is empty.' } }
     const reste = chemin.slice(prefixe.length)
+    // API « contents » : seule façon d'écrire le premier fichier d'un dépôt vide.
+    const contenu = /^\/contents\/(.+)$/.exec(reste)?.[1]
+    if (methode === 'PUT' && contenu !== undefined) {
+      const donnees = (typeof corps === 'object' && corps !== null ? corps : {}) as Record<string, unknown>
+      if (!this.vide) return { statut: 405, corps: { message: 'Not implemented' } }
+      const texte = decoderBase64(String(donnees.content))
+      const arbre = this.ajouterArbre(new Map([[decodeURIComponent(contenu), await this.ajouterBlob(texte)]]))
+      this.commit = this.ajouterCommit({ arbre, parents: [], message: String(donnees.message), date: new Date().toISOString() })
+      this.vide = false
+      return { statut: 201, corps: { content: { path: contenu }, commit: { sha: this.commit } } }
+    }
+    if (this.vide) return { statut: 409, corps: { message: 'Git Repository is empty.' } }
 
     if (methode === 'GET') {
       if (reste === `/git/ref/heads/${this.branche}`) {
@@ -209,6 +250,11 @@ function ok(corps: unknown): ReponseFaux {
 
 function introuvable(): ReponseFaux {
   return { statut: 404, corps: { message: 'Not Found' } }
+}
+
+function decoderBase64(base64: string): string {
+  const binaire = atob(base64)
+  return new TextDecoder().decode(Uint8Array.from(binaire, (c) => c.charCodeAt(0)))
 }
 
 /** Base64 coupé toutes les 60 colonnes, comme le renvoie GitHub. */

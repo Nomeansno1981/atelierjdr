@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { Atelier } from './etat/atelier'
+import { nomComplet } from './github/client'
 import { EcranAtelier } from './ui/EcranAtelier'
 import { EcranConnexion } from './ui/connexion/EcranConnexion'
 
@@ -22,11 +23,13 @@ export function App({ atelier }: { atelier: Atelier }) {
           depotConnu={etat.depot}
           message={etat.message}
           seConnecter={(jeton, depot) => atelier.seConnecter(jeton, depot)}
+          creerLivre={(jeton, cible, livre) => atelier.creerLivre(jeton, cible, livre)}
         />
       )
     case 'atelier':
       return (
-        <EcranAtelier atelier={atelier} etat={etat} />
+        // Changer de livre remplace tout l'écran : rien ne reste de l'autre livre.
+        <EcranAtelier key={nomComplet(etat.connexion.depot).toLowerCase()} atelier={atelier} etat={etat} />
       )
   }
 }

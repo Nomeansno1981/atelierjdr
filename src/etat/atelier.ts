@@ -8,27 +8,34 @@
  * demande (Cmd+S, changement de section, onglet en arrière-plan).
  */
 
-import { ErreurPlan, lirePlan, serialiserPlan, toutesLesSections, type Plan } from '../domaine/plan'
+import { nouveauPlan, type NouveauLivre } from '../domaine/operations'
+import { ErreurPlan, lirePlan, reglesTypo, serialiserPlan, toutesLesSections, type Plan } from '../domaine/plan'
 import {
   creerClient,
   ErreurGitHub,
   lireNomDepot,
   memeDepot,
+  nomComplet,
   type ClientGitHub,
   type Depot,
 } from '../github/client'
-import { ecrireFichiers, envoyer, messageCommit, type TexteAEnvoyer } from '../github/ecriture'
+import { creerPremierFichier, ecrireFichiers, envoyer, messageCommit, type TexteAEnvoyer } from '../github/ecriture'
 import { shaBlobGit } from '../github/empreinte'
-import { lireInfosDepot, lireTete } from '../github/lecture'
+import { examinerDepot, type ContenuDepot } from '../github/lecture'
 import { CHEMIN_PLAN, synchroniser } from '../github/synchro'
 import {
+  baseDuProjet,
   Cache,
   demanderStockagePersistant,
   NOM_BASE,
+  projetCourant,
+  projetDe,
   type BrouillonPlan,
   type BrouillonTexte,
   type Connexion,
   type FichierCache,
+  type ProjetConnu,
+  type Registre,
 } from '../stockage/cache'
 
 /** Délai entre la dernière opération du plan et l'envoi groupé. */
@@ -94,6 +101,29 @@ export type EtatAtelier =
   | { phase: 'connexion'; depot: Depot | null; message: string | null }
   | EtatOuvert
 
+/** Dépôt accessible qui ne contient pas encore de manuscrit. */
+export interface DepotACreer {
+  depot: Depot
+  branche: string
+  /** Aucun commit : le premier fichier passe par une autre API. */
+  vide: boolean
+}
+
+export type ResultatOuverture =
+  | { etat: 'ouvert' }
+  | { etat: 'erreur'; message: string }
+  /** Le dépôt est accessible mais sans plan.json : on propose d'y créer le manuscrit. */
+  | ({ etat: 'a-creer' } & DepotACreer)
+
+/** Un livre de l'appareil, pour la liste des livres. */
+export interface ResumeLivre {
+  depot: Depot
+  titre: string
+  /** Modifications enregistrées sur l'appareil et pas encore envoyées. */
+  enAttente: number
+  ouvert: boolean
+}
+
 export interface OptionsAtelier {
   fetch?: typeof fetch
   nomBase?: string
@@ -121,8 +151,14 @@ type Minuterie = 'plan' | 'texte' | 'essai' | 'ecriture'
 export class Atelier {
   private etat: EtatAtelier = { phase: 'demarrage' }
   private readonly ecouteurs = new Set<() => void>()
+  /** Base du registre de l'appareil : le jeton et les livres connus. */
+  private registre: Cache | null = null
+  /** Base du livre ouvert (parfois celle du registre : voir stockage/cache.ts). */
   private cache: Cache | null = null
   private client: ClientGitHub | null = null
+  /** Les écritures du registre passent l'une après l'autre. */
+  private fileRegistre: Promise<unknown> = Promise.resolve()
+  private titreMemorise: string | null = null
 
   private donnees: DonneesCache | null = null
   private brouillon: BrouillonPlan | null = null
@@ -153,6 +189,7 @@ export class Atelier {
   private changer(etat: EtatAtelier): void {
     this.etat = etat
     for (const e of this.ecouteurs) e()
+    void this.memoriserTitre().catch(() => undefined)
   }
 
   /** Republie l'état ouvert à partir des données internes. */
@@ -162,7 +199,7 @@ export class Atelier {
       ...this.etat,
       manuscrit: this.manuscrit(),
       synchro: synchro ?? this.etat.synchro,
-      enAttente: (this.brouillon?.descriptions.length ?? 0) + this.brouillonsTexte.size,
+      enAttente: this.enAttente(),
       conflit: this.conflit,
       fusion: this.fusion,
       annulable: this.annulations.at(-1)?.description ?? null,
@@ -212,22 +249,28 @@ export class Atelier {
   // --- Cycle de vie -------------------------------------------------------
 
   async demarrer(): Promise<void> {
+    let registre: Registre | null
     try {
-      this.cache = await Cache.ouvrir(this.options.nomBase ?? NOM_BASE)
+      this.registre = await Cache.ouvrir(this.options.nomBase ?? NOM_BASE)
+      registre = await this.registre.lireRegistre()
     } catch {
-      this.changer({
-        phase: 'panne',
-        message:
-          'Le stockage local du navigateur est indisponible. La navigation privée le bloque parfois : ouvrez l’Atelier dans une fenêtre normale.',
-      })
+      this.signalerPanneStockage()
       return
     }
-    const connexion = await this.cache.lireConnexion()
-    if (connexion?.jeton == null) {
-      this.changer({ phase: 'connexion', depot: connexion?.depot ?? null, message: null })
+    const projet = registre && projetCourant(registre)
+    if (registre?.jeton == null || !projet) {
+      this.changer({ phase: 'connexion', depot: projet?.depot ?? null, message: null })
       return
     }
-    await this.ouvrirAtelier({ ...connexion, jeton: connexion.jeton })
+    await this.ouvrirProjet(registre.jeton, projet)
+  }
+
+  private signalerPanneStockage(): void {
+    this.changer({
+      phase: 'panne',
+      message:
+        'Le stockage local du navigateur est indisponible. La navigation privée le bloque parfois : ouvrez l’Atelier dans une fenêtre normale.',
+    })
   }
 
   /**
@@ -253,51 +296,245 @@ export class Atelier {
 
   // --- Connexion ------------------------------------------------------------
 
-  /** Renvoie un message d'erreur à afficher, ou null si la connexion a réussi. */
-  async seConnecter(jetonSaisi: string, saisieDepot: string): Promise<string | null> {
-    const cache = this.cache
-    if (!cache) return 'L’Atelier n’a pas fini de démarrer.'
+  /**
+   * Connexion depuis l'écran d'accueil : vérifie le jeton et le dépôt, puis
+   * ouvre le livre. Un dépôt sans manuscrit est signalé pour être créé.
+   */
+  async seConnecter(jetonSaisi: string, saisieDepot: string): Promise<ResultatOuverture> {
+    if (!this.registre) return { etat: 'erreur', message: 'L’Atelier n’a pas fini de démarrer.' }
     const jeton = jetonSaisi.trim()
-    if (jeton === '') return 'Collez votre jeton d’accès.'
-    const depot = lireNomDepot(saisieDepot)
-    if (!depot) return 'Nom de dépôt invalide : écrivez-le sous la forme utilisateur/katastrophe.'
+    if (jeton === '') return { etat: 'erreur', message: 'Collez votre jeton d’accès.' }
+    const resultat = await this.examiner(jeton, saisieDepot)
+    if (resultat.etat === 'ouvert') void demanderStockagePersistant()
+    return resultat
+  }
 
-    const client = creerClient(jeton, this.options.fetch)
-    let branche: string
+  /** Ajoute un livre déjà sur GitHub, avec le jeton de l'appareil, et l'ouvre. */
+  async ajouterLivre(saisieDepot: string): Promise<ResultatOuverture> {
+    const etat = this.etat
+    if (etat.phase !== 'atelier') return { etat: 'erreur', message: 'L’Atelier n’est pas connecté.' }
+    const depot = lireNomDepot(saisieDepot)
+    // Le livre déjà ouvert : rien à faire.
+    if (depot && memeDepot(depot, etat.connexion.depot)) return { etat: 'ouvert' }
+    return this.examiner(etat.connexion.jeton, saisieDepot)
+  }
+
+  /** Vérifie l'accès au dépôt ; s'il contient un manuscrit, l'enregistre et l'ouvre. */
+  private async examiner(jeton: string, saisieDepot: string): Promise<ResultatOuverture> {
+    const depot = lireNomDepot(saisieDepot)
+    if (!depot) {
+      return { etat: 'erreur', message: 'Nom de dépôt invalide : écrivez-le sous la forme utilisateur/katastrophe.' }
+    }
+    let examen: { branche: string; contenu: ContenuDepot }
     try {
-      branche = (await lireInfosDepot(client, depot)).brancheParDefaut
-      // Vérifie dès maintenant l'accès au contenu, pour que l'erreur
-      // s'affiche ici plutôt qu'après la connexion.
-      await lireTete(client, depot, branche)
+      examen = await examinerDepot(creerClient(jeton, this.options.fetch), depot)
     } catch (e) {
       if (e instanceof ErreurGitHub && e.nature === 'jeton') {
-        return 'GitHub refuse ce jeton : vérifiez qu’il est copié en entier et qu’il n’a pas expiré.'
+        return {
+          etat: 'erreur',
+          message: 'GitHub refuse ce jeton : vérifiez qu’il est copié en entier et qu’il n’a pas expiré.',
+        }
+      }
+      if (e instanceof ErreurGitHub && e.nature === 'introuvable') {
+        return {
+          etat: 'erreur',
+          message: `Dépôt ${nomComplet(depot)} introuvable : vérifiez son nom, et que votre jeton y donne accès (sur GitHub, ajoutez ce dépôt à ceux du jeton).`,
+        }
+      }
+      return { etat: 'erreur', message: messageErreur(e) }
+    }
+    if (examen.contenu !== 'manuscrit') {
+      return { etat: 'a-creer', depot, branche: examen.branche, vide: examen.contenu === 'vide' }
+    }
+    await this.enregistrerEtOuvrir(jeton, depot, examen.branche)
+    return { etat: 'ouvert' }
+  }
+
+  /**
+   * Crée le manuscrit d'un nouveau livre (son plan.json) dans un dépôt qui
+   * n'en a pas, puis l'ouvre. Les règles typographiques du livre ouvert sont
+   * reprises. Sans jeton fourni, celui de l'appareil sert.
+   */
+  async creerLivre(jetonSaisi: string | null, cible: DepotACreer, livre: NouveauLivre): Promise<string | null> {
+    const etat = this.etat
+    const jeton = jetonSaisi?.trim() || (etat.phase === 'atelier' ? etat.connexion.jeton : '')
+    if (!this.registre || jeton === '') return 'L’Atelier n’est pas connecté.'
+    if (livre.titre.trim() === '') return 'Donnez un titre au livre.'
+    const actuel = this.manuscrit()?.plan
+    const plan = nouveauPlan(livre, actuel ? reglesTypo(actuel) : undefined)
+    const client = creerClient(jeton, this.options.fetch)
+    const fichier = { chemin: CHEMIN_PLAN, contenu: serialiserPlan(plan) }
+    const message = `Création du manuscrit : ${plan.livre.titre}`
+    try {
+      if (cible.vide) await creerPremierFichier(client, cible.depot, cible.branche, fichier, message)
+      else await ecrireFichiers(client, cible.depot, cible.branche, [fichier], message)
+    } catch (e) {
+      if (e instanceof ErreurGitHub && e.nature === 'permission') {
+        return 'Le jeton ne peut pas écrire dans ce dépôt : donnez-lui la permission « Contents » en lecture et écriture.'
       }
       return messageErreur(e)
     }
-
-    const precedente = await cache.lireConnexion()
-    if (precedente && !memeDepot(precedente.depot, depot)) await cache.viderManuscrit()
-    const connexion: ConnexionActive = { jeton, depot, branche }
-    await cache.enregistrerConnexion(connexion)
+    await this.enregistrerEtOuvrir(jeton, cible.depot, cible.branche)
     void demanderStockagePersistant()
-    await this.ouvrirAtelier(connexion)
     return null
   }
 
+  /** Passe à un autre livre de l'appareil. Ce qui est en attente est d'abord envoyé si possible. */
+  async changerDeLivre(depot: Depot): Promise<void> {
+    const etat = this.etat
+    if (etat.phase !== 'atelier' || memeDepot(etat.connexion.depot, depot)) return
+    const registre = await this.modifierRegistre((r) => r)
+    const projet = registre && projetDe(registre, depot)
+    if (!projet) return
+    await this.enregistrerEtOuvrir(etat.connexion.jeton, projet.depot, projet.branche)
+  }
+
+  /**
+   * Retire un livre de cet appareil : sa copie locale et ses modifications
+   * pas encore envoyées sont effacées. Le dépôt GitHub n'est pas touché.
+   */
+  async retirerLivre(depot: Depot): Promise<void> {
+    const etat = this.etat
+    const registre = this.registre
+    if (etat.phase !== 'atelier' || !registre || memeDepot(etat.connexion.depot, depot)) return
+    const projet = projetDe((await registre.lireRegistre()) ?? { jeton: null, projets: [], courant: '' }, depot)
+    if (!projet) return
+    await this.modifierRegistre((r) => r && { ...r, projets: r.projets.filter((p) => !memeDepot(p.depot, depot)) })
+    if (projet.base === registre.nom) await registre.viderManuscrit()
+    else await Cache.supprimer(projet.base)
+  }
+
+  /** Les livres de l'appareil, avec ce qui attend d'être envoyé pour chacun. */
+  async resumerLivres(): Promise<ResumeLivre[]> {
+    const etat = this.etat
+    const registre = this.registre
+    if (etat.phase !== 'atelier' || !registre) return []
+    const projets = (await registre.lireRegistre())?.projets ?? []
+    return Promise.all(
+      projets.map(async (p): Promise<ResumeLivre> => {
+        const ouvert = memeDepot(p.depot, etat.connexion.depot)
+        const titre = (ouvert ? this.manuscrit()?.plan?.livre.titre : null) ?? p.titre ?? nomComplet(p.depot)
+        if (ouvert) return { depot: p.depot, titre, enAttente: this.enAttente(), ouvert }
+        if (p.base === registre.nom) return { depot: p.depot, titre, enAttente: await registre.compterEnAttente(), ouvert }
+        const cache = await Cache.ouvrir(p.base)
+        try {
+          return { depot: p.depot, titre, enAttente: await cache.compterEnAttente(), ouvert }
+        } finally {
+          cache.fermer()
+        }
+      }),
+    )
+  }
+
+  /** Déconnexion : efface le jeton et la copie de tous les livres sur cet appareil. */
   async seDeconnecter(): Promise<void> {
-    if (!this.cache) return
+    const registre = this.registre
+    if (!registre) return
+    await this.fermerProjet({ envoyer: false })
+    const projets = (await registre.lireRegistre())?.projets ?? []
+    for (const p of projets) if (p.base !== registre.nom) await Cache.supprimer(p.base)
+    await this.modifierRegistre(() => null)
+    await registre.toutEffacer()
+    this.changer({ phase: 'connexion', depot: null, message: null })
+  }
+
+  /** Inscrit le livre au registre (jeton compris), en fait le livre ouvert et l'ouvre. */
+  private async enregistrerEtOuvrir(jeton: string, depot: Depot, branche: string): Promise<void> {
+    const base = this.registre
+    if (!base) return
+    await this.fermerProjet({ envoyer: true })
+    const registre = await this.modifierRegistre((r) => {
+      const projets = r?.projets ?? []
+      const connu = r && projetDe(r, depot)
+      const projet: ProjetConnu = connu
+        ? { ...connu, branche }
+        : { depot, branche, base: baseDuProjet(base.nom, depot), titre: null }
+      return {
+        jeton,
+        projets: connu ? projets.map((p) => (p === connu ? projet : p)) : [...projets, projet],
+        courant: nomComplet(projet.depot),
+      }
+    })
+    const projet = registre && projetCourant(registre)
+    if (projet) await this.ouvrirProjet(jeton, projet)
+  }
+
+  private async ouvrirProjet(jeton: string, projet: ProjetConnu): Promise<void> {
+    const registre = this.registre
+    if (!registre) return
+    try {
+      this.cache = projet.base === registre.nom ? registre : await Cache.ouvrir(projet.base)
+    } catch {
+      this.signalerPanneStockage()
+      return
+    }
+    await this.ouvrirAtelier({ jeton, depot: projet.depot, branche: projet.branche })
+  }
+
+  /**
+   * Quitte le livre ouvert : tout ce qui a été tapé est écrit sur l'appareil
+   * et, si on le demande, envoyé quand GitHub répond. Les modifications qui
+   * n'ont pas pu partir restent dans la base du livre et partiront à sa
+   * prochaine ouverture.
+   */
+  private async fermerProjet({ envoyer: aEnvoyer }: { envoyer: boolean }): Promise<void> {
+    if (this.etat.phase === 'atelier') {
+      await this.ecrireTextes()
+      if (aEnvoyer && this.aDesModifications() && !this.conflit) {
+        this.arreter('plan')
+        this.arreter('texte')
+        await this.synchroniser()
+      }
+    }
+    await this.cycleSuivant?.catch(() => undefined)
+    await this.cycleEnCours?.catch(() => undefined)
     this.arreterMinuteries()
-    await this.cache.toutEffacer()
     this.client = null
     this.donnees = null
     this.brouillon = null
     this.brouillonsTexte.clear()
     this.ecrituresEnAttente.clear()
     this.conflit = null
+    this.fusion = null
+    this.forcerProchainEnvoi = false
     this.annulations = []
     this.retablissements = []
-    this.changer({ phase: 'connexion', depot: null, message: null })
+    this.titreMemorise = null
+    if (this.cache && this.cache !== this.registre) this.cache.fermer()
+    this.cache = null
+  }
+
+  /** Lit, transforme et réécrit le registre, une modification à la fois. null l'efface. */
+  private modifierRegistre(modifier: (r: Registre | null) => Registre | null): Promise<Registre | null> {
+    const suite = this.fileRegistre.then(async () => {
+      const base = this.registre
+      if (!base) return null
+      const avant = await base.lireRegistre()
+      const apres = modifier(avant)
+      if (apres && apres !== avant) await base.enregistrerRegistre(apres)
+      return apres
+    })
+    this.fileRegistre = suite.catch(() => undefined)
+    return suite
+  }
+
+  /** Garde le titre du livre ouvert dans le registre, pour la liste des livres. */
+  private async memoriserTitre(): Promise<void> {
+    const etat = this.etat
+    if (etat.phase !== 'atelier') return
+    const titre = etat.manuscrit?.plan?.livre.titre
+    if (titre === undefined || titre === this.titreMemorise) return
+    this.titreMemorise = titre
+    const depot = etat.connexion.depot
+    await this.modifierRegistre((r) => {
+      const projet = r && projetDe(r, depot)
+      if (!r || !projet || projet.titre === titre) return r
+      return { ...r, projets: r.projets.map((p) => (p === projet ? { ...p, titre } : p)) }
+    })
+  }
+
+  private enAttente(): number {
+    return (this.brouillon?.descriptions.length ?? 0) + this.brouillonsTexte.size
   }
 
   private async ouvrirAtelier(connexion: ConnexionActive): Promise<void> {
@@ -642,7 +879,7 @@ export class Atelier {
         // Le dépôt, le cache et les brouillons sont gardés : seul le jeton est à ressaisir.
         this.arreterMinuteries()
         await this.ecrireTextes()
-        await cache.enregistrerConnexion({ ...connexion, jeton: null })
+        await this.modifierRegistre((r) => r && { ...r, jeton: null })
         this.client = null
         this.changer({
           phase: 'connexion',

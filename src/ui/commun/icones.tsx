@@ -100,3 +100,10 @@ export const IconeFermer = () => (
     <path d="m5 5 10 10M15 5 5 15" />
   </Icone>
 )
+
+/** Petit chevron vers le bas : ce bouton ouvre une liste. */
+export const IconeChevron = () => (
+  <Icone taille={14}>
+    <path d="m5 8 5 5 5-5" />
+  </Icone>
+)

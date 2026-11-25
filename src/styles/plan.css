@@ -7,6 +7,8 @@
   --ombre: 0 1px 2px rgb(0 0 0 / 0.12), 0 2px 6px rgb(0 0 0 / 0.06);
   --ombre-forte: 0 10px 28px rgb(0 0 0 / 0.25);
   --bouton-postit: rgb(255 255 255 / 0.5);
+  --insertion: #d92d20;
+  --insertion-texte: #ffffff;
   --planche: 300px;
 }
 
@@ -18,6 +20,8 @@
     --ombre: 0 1px 2px rgb(0 0 0 / 0.5);
     --ombre-forte: 0 10px 28px rgb(0 0 0 / 0.6);
     --bouton-postit: rgb(0 0 0 / 0.28);
+    --insertion: #ff6b5e;
+    --insertion-texte: #1c1a18;
   }
 }
 
@@ -518,10 +522,34 @@
   padding-right: 0;
 }
 
-/* Original d'un post-it glissé : même place, même taille, mais invisible. */
-.postit-cache {
-  visibility: hidden;
+/* Post-it glissé au pointeur : il reste à sa place, estompé, jusqu'au dépôt. */
+.postit-source {
+  opacity: 0.35;
+  outline: 2px dashed var(--trait);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+/* Ligne d'insertion : là où le post-it glissé arrivera, entre deux post-its. */
+.postit[data-insertion]::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: -8px;
+  bottom: -8px;
+  width: 5px;
+  border-radius: 3px;
+  background: var(--insertion);
+  box-shadow: 0 0 0 2px var(--surface);
   pointer-events: none;
+}
+
+.postit[data-insertion='avant']::after {
+  left: -7px;
+}
+
+.postit[data-insertion='apres']::after {
+  right: -7px;
 }
 
 .cadre-fantome {
@@ -542,9 +570,36 @@
   font-size: 0.9rem;
   font-weight: 650;
   line-height: 1.2;
-  opacity: 0.92;
+  /* Assez transparente pour laisser voir la ligne d'insertion dessous. */
+  opacity: 0.8;
   transform: rotate(-2deg);
   cursor: grabbing;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.fantome-titre {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.postit-fantome.postit-blanche {
+  background-color: var(--page);
+  background-image: repeating-linear-gradient(45deg, transparent 0 7px, var(--hachure) 7px 9px);
+}
+
+/* Pages et partie à l'arrivée. */
+.fantome-destination {
+  align-self: flex-start;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--insertion);
+  color: var(--insertion-texte);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-style: normal;
+  white-space: nowrap;
 }
 
 .en-glissement .postit-inserer,
@@ -797,4 +852,127 @@ textarea {
   align-items: center;
   gap: 6px;
   font-weight: 600;
+}
+
+/* --- Livres ------------------------------------------------------------- */
+
+/* Le titre du livre ouvre la liste des livres. Le décalage est porté par le
+   titre, pas par le bouton : une marge négative sur le bouton fausserait la
+   largeur calculée du titre, qui serait tronqué. */
+.barre-titre-livre {
+  margin-left: -7px;
+}
+
+.titre-livre {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 0;
+  padding: 2px 6px;
+  border-color: transparent;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+}
+
+.titre-livre:hover {
+  border-color: var(--bordure);
+}
+
+.titre-livre-texte {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titre-livre .icone {
+  flex: none;
+  color: var(--texte-doux);
+}
+
+.liste-livres {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.livre-ligne {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.livre {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+  text-align: left;
+}
+
+.livre-ouvert {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.livre-titre {
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.livre .aide {
+  overflow-wrap: anywhere;
+}
+
+.bouton-discret {
+  border-color: transparent;
+  background: transparent;
+  color: var(--texte-doux);
+}
+
+.bouton-discret:hover {
+  border-color: var(--bordure);
+}
+
+.ajout-livre h3 {
+  margin: 8px 0 0;
+  font-size: 1rem;
+}
+
+.ligne-ajout {
+  display: flex;
+  gap: 8px;
+}
+
+.aide-details {
+  margin-top: 8px;
+  color: var(--texte-doux);
+  font-size: 0.9rem;
+}
+
+.aide-details summary {
+  cursor: pointer;
+  min-height: var(--cible-tactile);
+  display: flex;
+  align-items: center;
+}
+
+.aide-details ol {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+
+.aide-details a {
+  color: var(--accent);
 }

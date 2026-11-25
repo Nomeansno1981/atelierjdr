@@ -1,14 +1,20 @@
 /**
- * Cache local dans IndexedDB : la connexion de l'appareil et une copie des
- * fichiers du manuscrit telle qu'au dernier commit synchronisé.
+ * Cache local dans IndexedDB.
+ *
+ * La base « atelier » tient le registre de l'appareil : le jeton et les
+ * livres connus. Chaque livre a sa propre base, qui garde une copie des
+ * fichiers de son manuscrit telle qu'au dernier commit synchronisé, et ses
+ * modifications pas encore envoyées. Le premier livre connecté avant
+ * l'arrivée des livres multiples garde, lui, la base « atelier » : rien
+ * n'a été déplacé.
  *
  * Le magasin « fichiers » ne contient que ce qui est sur GitHub. Les
  * modifications locales pas encore envoyées vivent dans « brouillon ».
  */
 
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { Plan } from '../domaine/plan'
-import type { Depot } from '../github/client'
+import { memeDepot, nomComplet, type Depot } from '../github/client'
 
 export const NOM_BASE = 'atelier'
 
@@ -17,6 +23,38 @@ export interface Connexion {
   jeton: string | null
   depot: Depot
   branche: string
+}
+
+/** Un livre connu de cet appareil. */
+export interface ProjetConnu {
+  depot: Depot
+  branche: string
+  /** Base IndexedDB qui garde la copie de son manuscrit. */
+  base: string
+  /** Titre du livre au dernier passage ; null s'il n'a jamais été lu. */
+  titre: string | null
+}
+
+/** Registre de l'appareil : un jeton pour tous les livres. */
+export interface Registre {
+  /** null après un 401 : les livres restent connus, le jeton est à ressaisir. */
+  jeton: string | null
+  projets: ProjetConnu[]
+  /** Livre ouvert (« propriétaire/nom »). */
+  courant: string
+}
+
+/** Base IndexedDB d'un livre, nommée d'après le registre et le dépôt. */
+export function baseDuProjet(nomRegistre: string, depot: Depot): string {
+  return `${nomRegistre}:${nomComplet(depot).toLowerCase()}`
+}
+
+export function projetDe(registre: Registre, depot: Depot): ProjetConnu | undefined {
+  return registre.projets.find((p) => memeDepot(p.depot, depot))
+}
+
+export function projetCourant(registre: Registre): ProjetConnu | undefined {
+  return registre.projets.find((p) => nomComplet(p.depot).toLowerCase() === registre.courant.toLowerCase())
 }
 
 export interface FichierCache {
@@ -66,7 +104,8 @@ export interface BrouillonTexte {
 }
 
 interface Schema extends DBSchema {
-  appareil: { key: 'connexion'; value: Connexion }
+  /** « registre » ; « connexion » est l'ancien format, d'avant les livres multiples. */
+  appareil: { key: 'connexion' | 'registre'; value: Connexion | Registre }
   synchro: { key: 'base'; value: BaseSynchro }
   fichiers: { key: string; value: FichierCache }
   brouillon: { key: 'plan'; value: BrouillonPlan }
@@ -87,20 +126,61 @@ export class Cache {
         if (ancienneVersion < 2) base.createObjectStore('brouillon')
         if (ancienneVersion < 3) base.createObjectStore('textes', { keyPath: 'id' })
       },
+      // Un autre onglet supprime cette base (livre retiré, déconnexion) : on la libère.
+      blocking() {
+        db.close()
+      },
     })
     return new Cache(db)
+  }
+
+  /** Supprime la base d'un livre. Attend que ses connexions soient fermées. */
+  static async supprimer(nom: string): Promise<void> {
+    await deleteDB(nom)
+  }
+
+  get nom(): string {
+    return this.db.name
   }
 
   fermer(): void {
     this.db.close()
   }
 
-  async lireConnexion(): Promise<Connexion | null> {
-    return (await this.db.get('appareil', 'connexion')) ?? null
+  /**
+   * Registre de l'appareil. Une connexion de l'ancien format devient un
+   * registre d'un seul livre, dont le manuscrit reste dans cette base.
+   */
+  async lireRegistre(): Promise<Registre | null> {
+    const tx = this.db.transaction('appareil', 'readwrite')
+    const magasin = tx.objectStore('appareil')
+    const registre = (await magasin.get('registre')) as Registre | undefined
+    if (registre) {
+      await tx.done
+      return registre
+    }
+    const ancienne = (await magasin.get('connexion')) as Connexion | undefined
+    if (!ancienne) {
+      await tx.done
+      return null
+    }
+    const converti: Registre = {
+      jeton: ancienne.jeton,
+      projets: [{ depot: ancienne.depot, branche: ancienne.branche, base: this.db.name, titre: null }],
+      courant: nomComplet(ancienne.depot),
+    }
+    await Promise.all([magasin.put(converti, 'registre'), magasin.delete('connexion'), tx.done])
+    return converti
   }
 
-  async enregistrerConnexion(connexion: Connexion): Promise<void> {
-    await this.db.put('appareil', connexion, 'connexion')
+  async enregistrerRegistre(registre: Registre): Promise<void> {
+    await this.db.put('appareil', registre, 'registre')
+  }
+
+  /** Nombre de modifications en attente : opérations du plan et textes. */
+  async compterEnAttente(): Promise<number> {
+    const [brouillon, textes] = await Promise.all([this.lireBrouillon(), this.db.count('textes')])
+    return (brouillon?.descriptions.length ?? 0) + textes
   }
 
   async lireBase(): Promise<BaseSynchro | null> {
@@ -156,7 +236,7 @@ export class Cache {
     await this.db.delete('textes', id)
   }
 
-  /** Vide le manuscrit en cache (changement de dépôt). */
+  /** Vide le manuscrit en cache (livre retiré de l'appareil). */
   async viderManuscrit(): Promise<void> {
     const tx = this.db.transaction(['fichiers', 'synchro', 'brouillon', 'textes'], 'readwrite')
     await Promise.all([
@@ -168,7 +248,7 @@ export class Cache {
     ])
   }
 
-  /** Déconnexion : efface le jeton et tout le cache de l'appareil. */
+  /** Déconnexion : efface le registre (jeton compris) et tout le cache de cette base. */
   async toutEffacer(): Promise<void> {
     const tx = this.db.transaction(['appareil', 'fichiers', 'synchro', 'brouillon', 'textes'], 'readwrite')
     await Promise.all([

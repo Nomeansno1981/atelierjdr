@@ -29,13 +29,18 @@ const CORS = {
  * Branche la page sur un faux GitHub. `couper` simule une panne de GitHub : les
  * requêtes vers api.github.com échouent comme sans réseau.
  */
-export async function brancherFauxGitHub(page: Page, faux: FauxGitHub): Promise<{ couper: (oui: boolean) => void }> {
+export async function brancherFauxGitHub(
+  page: Page,
+  depots: FauxGitHub | readonly FauxGitHub[],
+): Promise<{ couper: (oui: boolean) => void }> {
+  const fauxs: readonly FauxGitHub[] = depots instanceof FauxGitHub ? [depots] : depots
   let coupe = false
   await page.route('https://api.github.com/**', async (route) => {
     const requete = route.request()
     if (coupe) return route.abort('internetdisconnected')
     if (requete.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
     const corps: unknown = requete.postData() ? requete.postDataJSON() : null
+    const faux = FauxGitHub.destinataire(fauxs, requete.url())
     const r = await faux.repondre(requete.method(), requete.url(), await requete.headerValue('authorization'), corps)
     return route.fulfill({
       status: r.statut,

@@ -85,6 +85,37 @@ export function racineDepot(depot: Depot): string {
   return racine(depot)
 }
 
+/** Ce que contient un dépôt, vu de l'Atelier. */
+export type ContenuDepot = 'manuscrit' | 'sans-plan' | 'vide'
+
+/**
+ * Branche par défaut d'un dépôt et ce qu'il contient : un manuscrit (un
+ * plan.json à la racine), d'autres fichiers seulement, ou rien du tout (un
+ * dépôt créé sans README n'a encore aucun commit).
+ */
+export async function examinerDepot(
+  client: ClientGitHub,
+  depot: Depot,
+): Promise<{ branche: string; contenu: ContenuDepot }> {
+  const { brancheParDefaut: branche } = await lireInfosDepot(client, depot)
+  let tete: string
+  try {
+    tete = await lireTete(client, depot, branche)
+  } catch (e) {
+    if (e instanceof ErreurGitHub && e.nature === 'depot-vide') return { branche, contenu: 'vide' }
+    throw e
+  }
+  const { fichiers } = await lireArbreDuCommit(client, depot, tete)
+  return { branche, contenu: fichiers.has('plan.json') ? 'manuscrit' : 'sans-plan' }
+}
+
+/** Encode un texte en base64, octets UTF-8 compris. */
+export function encoderBase64Utf8(texte: string): string {
+  let binaire = ''
+  for (const o of new TextEncoder().encode(texte)) binaire += String.fromCharCode(o)
+  return btoa(binaire)
+}
+
 export function decoderBase64Utf8(base64: string): string {
   const binaire = atob(base64.replace(/\s/g, ''))
   const octets = Uint8Array.from(binaire, (c) => c.charCodeAt(0))

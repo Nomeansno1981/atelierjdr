@@ -22,6 +22,19 @@ import { numerosDesParties } from './romains'
 
 export const MODELE_PAR_DEFAUT = 'Katastrophe__v{n}.md'
 
+/**
+ * Modèle de nom tiré du titre d'un nouveau livre : lettres sans accents et
+ * chiffres, le reste devient « _ ». « Katastrophê » donne le modèle par défaut.
+ */
+export function modelePourTitre(titre: string): string {
+  const base = titre
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return `${base || 'Manuscrit'}__v{n}.md`
+}
+
 const TIRET_CADRATIN = String.fromCharCode(0x2014)
 
 /** Blancs : une section qui n'en contient que d'autres est vide. Même liste dans compiler.py. */

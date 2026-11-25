@@ -68,8 +68,8 @@ export class ErreurGitHub extends Error {
 export interface ClientGitHub {
   /** GET sur un chemin de l'API, par exemple « /repos/a/b ». */
   lire(chemin: string): Promise<unknown>
-  /** POST ou PATCH avec un corps JSON. */
-  ecrire(methode: 'POST' | 'PATCH', chemin: string, corps: unknown): Promise<unknown>
+  /** POST, PATCH ou PUT avec un corps JSON. */
+  ecrire(methode: 'POST' | 'PATCH' | 'PUT', chemin: string, corps: unknown): Promise<unknown>
 }
 
 export function creerClient(
@@ -151,11 +151,7 @@ async function traduireErreur(reponse: Response): Promise<ErreurGitHub> {
     return new ErreurGitHub('concurrence', 'La branche a changé pendant l’envoi.', statut)
   }
   if (statut === 409 && /empty/i.test(detail)) {
-    return new ErreurGitHub(
-      'depot-vide',
-      'Le dépôt est vide. Créez-le avec un README (voir la documentation de l’Atelier).',
-      statut,
-    )
+    return new ErreurGitHub('depot-vide', 'Le dépôt est vide : il ne contient encore aucun fichier.', statut)
   }
   return new ErreurGitHub(
     'reponse',

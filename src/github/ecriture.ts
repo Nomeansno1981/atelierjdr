@@ -15,7 +15,7 @@ import { fusionnerPlans } from '../domaine/fusionPlan'
 import { lirePlan, serialiserPlan, toutesLesSections, type Plan } from '../domaine/plan'
 import { shaBlobGit } from './empreinte'
 import { ErreurGitHub, type ClientGitHub, type Depot } from './client'
-import { lireArbreDuCommit, lireBlob, lireTete, racineDepot } from './lecture'
+import { encoderBase64Utf8, lireArbreDuCommit, lireBlob, lireTete, racineDepot } from './lecture'
 import { CHEMIN_PLAN } from './synchro'
 
 export interface EntreeArbre {
@@ -357,6 +357,25 @@ export async function ecrireFichiers(
     }
   }
   throw new ErreurGitHub('concurrence', 'Le dépôt change trop vite : réessayez dans un instant.')
+}
+
+/**
+ * Premier fichier d'un dépôt vide. L'API Git Data refuse de travailler sur
+ * un dépôt sans commit ; l'API « contents » crée ce premier commit.
+ */
+export async function creerPremierFichier(
+  client: ClientGitHub,
+  depot: Depot,
+  branche: string,
+  fichier: { chemin: string; contenu: string },
+  message: string,
+): Promise<void> {
+  const chemin = fichier.chemin.split('/').map(encodeURIComponent).join('/')
+  await client.ecrire('PUT', `${racineDepot(depot)}/contents/${chemin}`, {
+    message,
+    content: encoderBase64Utf8(fichier.contenu),
+    branch: branche,
+  })
 }
 
 /** « 2026-11-25-1432 », à l'heure de l'appareil. */

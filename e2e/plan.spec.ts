@@ -50,7 +50,7 @@ test.describe('à la souris', () => {
     expect(erreurs).toEqual([])
   })
 
-  test('pendant le glissement, la grille montre la place et se repagine', async ({ page }) => {
+  test('pendant le glissement, la grille reste fixe et une ligne rouge marque l’arrivée', async ({ page }) => {
     await ouvrir(page)
     const source = await postit(page, 'Avant-propos').boundingBox()
     const cible = await page.locator('.page[data-page="1"]').boundingBox()
@@ -60,13 +60,41 @@ test.describe('à la souris', () => {
     await page.mouse.move(cible.x + 10, cible.y + cible.height / 2, { steps: 12 })
     await page.waitForTimeout(150)
     await page.mouse.move(cible.x + 12, cible.y + cible.height / 2, { steps: 2 })
-    // Avant-propos en page 1 : « Page de titre » doit commencer à droite,
-    // une page blanche s'insère en 2.
-    await expect(page.locator('.postit-place')).toHaveCount(1)
-    await expect(page.locator('.page-blanche[data-page="2"]')).toBeVisible()
+    // Rien ne bouge : l'ordre affiché est inchangé, Avant-propos reste à sa
+    // place, estompé, et aucune page blanche n'apparaît encore.
+    await expect(titres(page)).toHaveText(TITRES)
+    await expect(page.locator('.postit-source')).toHaveCount(1)
+    await expect(page.locator('.page-blanche[data-page="2"]')).toHaveCount(0)
+    // La ligne d'insertion est au bord gauche de « Page de titre », et la
+    // silhouette annonce l'arrivée : page 1, dans la Présentation.
+    await expect(page.locator('.postit[data-insertion]')).toHaveCount(1)
+    await expect(page.locator('.postit[data-insertion="avant"] .postit-titre')).toHaveText('Page de titre')
+    await expect(page.locator('.fantome-destination')).toHaveText('p. 1 · I. Présentation')
     await page.keyboard.press('Escape')
     await page.mouse.up()
     await expect(titres(page)).toHaveText(TITRES)
+    await expect(page.locator('.postit[data-insertion], .postit-source')).toHaveCount(0)
+  })
+
+  test('sur la seconde moitié d’une section, la ligne passe à son bord droit', async ({ page }) => {
+    await ouvrir(page)
+    const source = await postit(page, 'Créer son personnage').boundingBox()
+    const cible = await postit(page, 'Avant-propos').boundingBox()
+    if (!source || !cible) throw new Error('invisible')
+    await page.mouse.move(source.x + source.width / 2, source.y + 40)
+    await page.mouse.down()
+    await page.mouse.move(source.x + source.width / 2 + 10, source.y + 50, { steps: 3 })
+    await page.mouse.move(cible.x + cible.width * 0.85, cible.y + cible.height / 2, { steps: 12 })
+    await page.waitForTimeout(150)
+    await page.mouse.move(cible.x + cible.width * 0.86, cible.y + cible.height / 2, { steps: 2 })
+    await expect(page.locator('.postit[data-insertion="apres"] .postit-titre')).toHaveText('Avant-propos')
+    await page.mouse.up()
+    await expect(titres(page)).toHaveText([
+      'Page de titre',
+      'Avant-propos',
+      'Créer son personnage',
+      ...sauf(TITRES, 'Page de titre', 'Avant-propos', 'Créer son personnage'),
+    ])
   })
 
   test('glisser vers le haut fait défiler la page, la cible reste juste', async ({ page }) => {

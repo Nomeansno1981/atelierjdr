@@ -26,17 +26,27 @@ interface Proprietes {
   colonne: number
   /** Déplacé au clavier : il est affiché à sa place provisoire. */
   place: boolean
-  /**
-   * Original d'un post-it glissé au doigt ou à la souris : gardé monté mais
-   * invisible, pour que le navigateur continue de lui envoyer les événements.
-   */
-  cache?: boolean
+  /** Glissé au doigt ou à la souris : il reste à sa place, estompé. */
+  source?: boolean
+  /** Ligne d'insertion du post-it glissé, à ce bord-ci. */
+  insertion?: 'avant' | 'apres' | undefined
   actions: ActionsPostIt
 }
 
 const sansGlisser = { [ATTRIBUT_SANS_GLISSER]: '' }
 
-export function PostIt({ section, segment, emplacement, etiquettePartie, mots, colonne, place, cache = false, actions }: Proprietes) {
+export function PostIt({
+  section,
+  segment,
+  emplacement,
+  etiquettePartie,
+  mots,
+  colonne,
+  place,
+  source = false,
+  insertion,
+  actions,
+}: Proprietes) {
   // Seul le premier segment se saisit : il porte l'identifiant de la section.
   const { listeners, setNodeRef } = useDraggable({
     id: segment.suite ? `${section.id}@${segment.premiere}` : section.id,
@@ -66,7 +76,7 @@ export function PostIt({ section, segment, emplacement, etiquettePartie, mots, c
     segment.suite ? 'postit-suite' : '',
     segment.continue ? 'postit-continue' : '',
     place ? 'postit-place' : '',
-    cache ? 'postit-cache' : '',
+    source ? 'postit-source' : '',
   ]
 
   return (
@@ -74,8 +84,8 @@ export function PostIt({ section, segment, emplacement, etiquettePartie, mots, c
       ref={setNodeRef}
       className={classes.join(' ')}
       style={style}
-      data-section={cache ? undefined : section.id}
-      aria-hidden={cache || undefined}
+      data-section={section.id}
+      data-insertion={insertion}
       {...listeners}
     >
       <button
@@ -183,25 +193,18 @@ function Jauge({ ecrits, cible }: { ecrits: number; cible: number }) {
   )
 }
 
-/** Place provisoire d'un post-it glissé au doigt ou à la souris. */
-export function PlacePostIt({ section, colonne, largeur }: { section: Section; colonne: number; largeur: number }) {
+/**
+ * Silhouette qui suit le pointeur pendant un glissement, avec les pages et
+ * la partie que la section prendrait là où elle serait déposée.
+ */
+export function FantomePostIt({ section, destination }: { section: Section; destination: string | null }) {
   return (
-    <div
-      className={`postit postit-place statut-${section.statut}`}
-      style={{ gridColumn: `${colonne} / span ${largeur}` }}
-      aria-hidden="true"
-    >
-      <span className="postit-titre">{section.titre}</span>
-    </div>
-  )
-}
-
-/** Silhouette qui suit le pointeur pendant un glissement. */
-export function FantomePostIt({ section }: { section: Section }) {
-  return (
-    <div className={`postit-fantome statut-${section.statut}`}>
-      {section.type === 'hors-texte' && <IconeHorsTexte />}
-      {section.titre}
+    <div className={`postit-fantome statut-${section.statut}${section.type === 'blanche' ? ' postit-blanche' : ''}`}>
+      <span className="fantome-titre">
+        {section.type === 'hors-texte' && <IconeHorsTexte />}
+        {section.titre}
+      </span>
+      {destination && <span className="fantome-destination">{destination}</span>}
     </div>
   )
 }

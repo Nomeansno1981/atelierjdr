@@ -5,8 +5,9 @@
  * découlent sont déduits au moment de l'envoi (github/ecriture.ts).
  */
 
+import { modelePourTitre } from './compilation'
 import { baseDuChemin, cheminLibre, slug } from './nomFichier'
-import type { ReglesTypo } from './typographie/regles'
+import { REGLES_PAR_DEFAUT, type ReglesTypo } from './typographie/regles'
 import {
   TITRE_PAGE_BLANCHE,
   toutesLesSections,
@@ -234,4 +235,41 @@ export function nouvelIdPartie(titre: string, parties: readonly Partie[]): strin
   let id = base
   for (let n = 2; pris.has(id); n++) id = `${base}-${n}`
   return id
+}
+
+/** Ce que l'on demande pour commencer un livre ; le reste se règle ensuite. */
+export interface NouveauLivre {
+  titre: string
+  pagesTotal: number
+  motsParPage: number
+  /** Titres des parties, dans l'ordre. Au moins une. */
+  parties: readonly string[]
+}
+
+/**
+ * Plan d'un nouveau livre : ses parties, aucune section. Les règles
+ * typographiques sont reprises du livre ouvert s'il y en a un, et le nom
+ * des compilations est tiré du titre.
+ */
+export function nouveauPlan(nouveau: NouveauLivre, typographie: ReglesTypo = REGLES_PAR_DEFAUT): Plan {
+  const titre = nouveau.titre.trim()
+  const parties: Partie[] = []
+  for (const brut of nouveau.parties) {
+    const t = brut.trim()
+    if (t !== '') parties.push({ id: nouvelIdPartie(t, parties), titre: t, numerotee: true })
+  }
+  if (parties.length === 0) parties.push({ id: 'partie', titre: 'Première partie', numerotee: true })
+  return {
+    version: 1,
+    livre: {
+      titre,
+      pagesTotal: Math.max(1, Math.round(nouveau.pagesTotal)),
+      motsParPage: Math.max(1, Math.round(nouveau.motsParPage)),
+      premierePage: 'droite',
+    },
+    reglages: { typographie: { ...typographie }, compilation: { modele: modelePourTitre(titre) } },
+    parties,
+    sections: [],
+    corbeille: [],
+  }
 }

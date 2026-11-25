@@ -16,7 +16,8 @@ import type { ReglesTypo } from '../../domaine/typographie/regles'
 import type { Atelier, EtatOuvert } from '../../etat/atelier'
 import { RechercheGlobale } from '../redaction/RechercheGlobale'
 import type { Route } from '../routes'
-import { IconeAnnuler, IconeCorbeille, IconeReglages, IconeRetablir, IconeSynchro } from '../commun/icones'
+import { IconeAnnuler, IconeChevron, IconeCorbeille, IconeReglages, IconeRetablir, IconeSynchro } from '../commun/icones'
+import { PanneauLivres } from '../livres/PanneauLivres'
 import { BandeauFusion } from '../commun/BandeauFusion'
 import { IndicateurSynchro } from '../commun/IndicateurSynchro'
 import { SelecteurVue } from '../commun/SelecteurVue'
@@ -37,6 +38,7 @@ type Panneau =
   | { type: 'creation'; index: number }
   | { type: 'corbeille' }
   | { type: 'reglages' }
+  | { type: 'livres' }
 
 const DUREE_BANDEAU_MS = 10_000
 
@@ -143,7 +145,21 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
     <div className="mode-plan" data-zoom={zoom}>
       <header className="barre barre-plan">
         <div className="barre-ligne">
-          <h1 className="barre-titre">{plan.livre.titre}</h1>
+          <h1 className="barre-titre barre-titre-livre">
+            <button
+              type="button"
+              className="titre-livre"
+              title="Changer de livre"
+              aria-haspopup="dialog"
+              aria-label={`${plan.livre.titre}, changer de livre`}
+              onClick={() => {
+                setPanneau({ type: 'livres' })
+              }}
+            >
+              <span className="titre-livre-texte">{plan.livre.titre}</span>
+              <IconeChevron />
+            </button>
+          </h1>
           <IndicateurSynchro synchro={etat.synchro} enAttente={etat.enAttente} conflit={etat.conflit !== null} />
         </div>
         <BarreEtat plan={plan} pagination={pagination} mots={mots} />
@@ -404,6 +420,15 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
             }}
           />
         </Suspense>
+      )}
+      {panneau?.type === 'livres' && (
+        <PanneauLivres
+          atelier={atelier}
+          etat={etat}
+          fermer={() => {
+            setPanneau(null)
+          }}
+        />
       )}
       {panneau?.type === 'reglages' && (
         <PanneauReglages

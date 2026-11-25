@@ -7,7 +7,7 @@ import {
 } from '@dnd-kit/core'
 import { getEventCoordinates } from '@dnd-kit/utilities'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { cibleInsertion, type PositionPointeur } from '../../domaine/glisser'
+import { cibleInsertion, type PositionPointeur, type Repere } from '../../domaine/glisser'
 import { construireGrille, type PageGrille, type Planche } from '../../domaine/grille'
 import { deplacer as deplacerSection, ordreAvecDeplacement } from '../../domaine/operations'
 import { paginer, type Pagination } from '../../domaine/pagination'
@@ -16,7 +16,7 @@ import { numerosDesParties } from '../../domaine/romains'
 import { IconePlus } from '../commun/icones'
 import { CapteurSouris, CapteurTactile } from './capteurs'
 import type { MotsSection } from './format'
-import { FantomePostIt, PlacePostIt, PostIt, type ActionsPostIt } from './PostIt'
+import { FantomePostIt, PostIt, type ActionsPostIt } from './PostIt'
 
 export interface ProprietesGrille {
   plan: Plan
@@ -33,16 +33,14 @@ interface Glissement {
   id: string
   /** Index d'insertion, compté dans l'ordre sans la section glissée. */
   index: number
-  mode: 'pointeur' | 'clavier'
   /**
-   * Position du post-it au départ (mode pointeur) : l'original y reste,
-   * invisible mais à la même place et à la même taille, car dnd-kit cale la
-   * silhouette sur lui.
+   * Au pointeur, la grille ne bouge pas : une ligne rouge marque l'endroit
+   * où le post-it s'insérera. Au clavier, il se déplace à sa place
+   * provisoire, qui reçoit le focus.
    */
-  plancheOrigine: string | null
-  premiereOrigine: number
-  colonneOrigine: number
-  largeurOrigine: number
+  mode: 'pointeur' | 'clavier'
+  /** Bord du post-it où dessiner la ligne d'insertion (pointeur seulement). */
+  repere: Repere | null
 }
 
 const COLONNE = { gauche: 1, droite: 2 } as const
@@ -51,9 +49,10 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
   const [glisse, setGlisse] = useState<Glissement | null>(null)
   const [annonce, setAnnonce] = useState('')
 
-  // Aperçu : la section à sa place provisoire, avec la partie qu'elle y prendrait.
+  // Au clavier, aperçu : la section à sa place provisoire, avec la partie
+  // qu'elle y prendrait. Au pointeur, la grille reste telle qu'elle est.
   const ordre = useMemo(
-    () => (glisse ? deplacerSection(plan, glisse.id, glisse.index).sections : plan.sections),
+    () => (glisse?.mode === 'clavier' ? deplacerSection(plan, glisse.id, glisse.index).sections : plan.sections),
     [plan, glisse],
   )
   const pagination = useMemo(() => paginer(ordre, plan.livre.premierePage), [ordre, plan.livre.premierePage])
@@ -84,13 +83,23 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
     useSensor(CapteurTactile, { activationConstraint: { delay: 300, tolerance: 8 } }),
   )
 
+  /** Où la section glissée arriverait : ses pages et sa partie à cette place. */
+  const destination = useMemo(() => {
+    if (!glisse) return null
+    const depart = plan.sections.findIndex((s) => s.id === glisse.id)
+    if (glisse.index === depart) return null
+    const apres = deplacerSection(plan, glisse.id, glisse.index)
+    const e = paginer(apres.sections, plan.livre.premierePage).emplacements.get(glisse.id)
+    const partie = apres.sections.find((s) => s.id === glisse.id)?.partie
+    return { emplacement: e ?? null, partie: partie === undefined ? '' : (etiquettes.get(partie) ?? partie) }
+  }, [plan, glisse, etiquettes])
+
   function annoncer(id: string, index: number) {
     const s = sections.get(id)
     if (!s) return
     const nouvelOrdre = ordreAvecDeplacement(plan.sections, id, index)
     const e = paginer(nouvelOrdre, plan.livre.premierePage).emplacements.get(id)
-    const pages = e ? (e.premiere === e.derniere ? `page ${e.premiere}` : `pages ${e.premiere} à ${e.derniere}`) : ''
-    setAnnonce(`${s.titre} : position ${index + 1} sur ${plan.sections.length}, ${pages}.`)
+    setAnnonce(`${s.titre} : position ${index + 1} sur ${plan.sections.length}, ${e ? pagesEnToutesLettres(e) : ''}.`)
   }
 
   function terminer(valider: boolean) {
@@ -118,18 +127,7 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
       const r = postit.getBoundingClientRect()
       decalage.current = { x: coordonnees.x - r.left, y: coordonnees.y - r.top }
     }
-    const plancheOrigine = postit?.closest<HTMLElement>('[data-planche]')?.dataset.planche ?? null
-    const planche = planches.find((p) => p.cle === plancheOrigine)
-    const segment = planche?.segments.find((s) => s.id === id && !s.suite)
-    setGlisse({
-      id,
-      index: plan.sections.findIndex((s) => s.id === id),
-      mode: 'pointeur',
-      plancheOrigine,
-      premiereOrigine: segment?.premiere ?? 0,
-      colonneOrigine: COLONNE[planche?.gauche?.numero === segment?.premiere ? 'gauche' : 'droite'],
-      largeurOrigine: segment ? segment.derniere - segment.premiere + 1 : 1,
-    })
+    setGlisse({ id, index: plan.sections.findIndex((s) => s.id === id), mode: 'pointeur', repere: null })
     setAnnonce(`${sections.get(id)?.titre ?? ''} saisi.`)
   }
 
@@ -145,8 +143,10 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
       if (!g || !d || !r) return
       const position = positionSousPointeur(r.left + d.x, r.top + d.y)
       if (!position) return
-      const index = cibleInsertion(courant.current.ordre, courant.current.pagination, g.id, position)
-      if (index !== g.index) setGlisse({ ...g, index })
+      const { index, repere } = cibleInsertion(courant.current.ordre, courant.current.pagination, g.id, position)
+      if (index !== g.index || repere?.id !== g.repere?.id || repere?.cote !== g.repere?.cote) {
+        setGlisse({ ...g, index, repere })
+      }
     })
   }
 
@@ -156,7 +156,7 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
       e.preventDefault()
       if (!g) {
         const index = plan.sections.findIndex((s) => s.id === id)
-        setGlisse({ id, index, mode: 'clavier', plancheOrigine: null, premiereOrigine: 0, colonneOrigine: 1, largeurOrigine: 1 })
+        setGlisse({ id, index, mode: 'clavier', repere: null })
         const titre = sections.get(id)?.titre ?? ''
         setAnnonce(
           `${titre} saisi, position ${index + 1} sur ${plan.sections.length}. Flèches pour déplacer, Espace ou Entrée pour déposer, Échap pour annuler.`,
@@ -256,7 +256,15 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
       <DragOverlay dropAnimation={null}>
         {glisse?.mode === 'pointeur' && sectionGlissee ? (
           <div ref={fantome} className="cadre-fantome" data-fantome="">
-            <FantomePostIt section={sectionGlissee} />
+            <FantomePostIt
+              section={sectionGlissee}
+              destination={
+                destination &&
+                [destination.emplacement && pagesAbregees(destination.emplacement), destination.partie]
+                  .filter(Boolean)
+                  .join(' · ')
+              }
+            />
           </div>
         ) : null}
       </DragOverlay>
@@ -277,8 +285,7 @@ interface ProprietesPlanche {
 function VuePlanche({ planche, pagination, sections, etiquettes, mots, glisse, actions }: ProprietesPlanche) {
   const pages = [planche.gauche, planche.droite].filter((p): p is PageGrille => p !== null)
   const auPointeur = glisse?.mode === 'pointeur'
-  // L'original du post-it glissé reste monté, invisible, dans sa planche de départ.
-  const original = auPointeur && glisse.plancheOrigine === planche.cle ? sections.get(glisse.id) : undefined
+  const repere = auPointeur ? glisse.repere : null
 
   return (
     <div className="planche" data-planche={planche.cle}>
@@ -306,58 +313,40 @@ function VuePlanche({ planche, pagination, sections, etiquettes, mots, glisse, a
           </Fragment>
         )
       })}
-      {[
-        ...planche.segments.map((segment) => {
-          const section = sections.get(segment.id)
-          if (!section) return null
-          const colonne = COLONNE[planche.gauche?.numero === segment.premiere ? 'gauche' : 'droite']
-          if (auPointeur && segment.id === glisse.id) {
-            return (
-              <PlacePostIt
-                key={`place-${segment.id}-${segment.premiere}`}
-                section={section}
-                colonne={colonne}
-                largeur={segment.derniere - segment.premiere + 1}
-              />
-            )
-          }
-          return (
-            <PostIt
-              key={`${segment.id}@${segment.premiere}`}
-              section={section}
-              segment={segment}
-              emplacement={pagination.emplacements.get(segment.id)}
-              etiquettePartie={etiquettes.get(section.partie) ?? section.partie}
-              mots={mots.get(section.id) ?? null}
-              colonne={colonne}
-              place={glisse?.mode === 'clavier' && glisse.id === section.id}
-              actions={actions}
-            />
-          )
-        }),
-        // Même clé et même liste qu'avant le glissement : React garde le
-        // même élément, auquel le navigateur continue d'adresser le doigt.
-        original && glisse && (
+      {planche.segments.map((segment) => {
+        const section = sections.get(segment.id)
+        if (!section) return null
+        const colonne = COLONNE[planche.gauche?.numero === segment.premiere ? 'gauche' : 'droite']
+        // La ligne d'insertion : au bord gauche du premier morceau de la
+        // section visée, ou au bord droit de son dernier.
+        const insertion =
+          repere?.id === section.id
+            ? repere.cote === 'avant'
+              ? segment.suite
+                ? undefined
+                : 'avant'
+              : segment.continue
+                ? undefined
+                : 'apres'
+            : undefined
+        // Le post-it glissé reste monté à sa place, estompé : le navigateur
+        // continue de lui adresser le doigt, et dnd-kit y cale la silhouette.
+        return (
           <PostIt
-            key={`${original.id}@${glisse.premiereOrigine}`}
-            section={original}
-            segment={{
-              id: original.id,
-              premiere: glisse.premiereOrigine,
-              derniere: glisse.premiereOrigine + glisse.largeurOrigine - 1,
-              suite: false,
-              continue: false,
-            }}
-            emplacement={undefined}
-            etiquettePartie={etiquettes.get(original.partie) ?? original.partie}
-            mots={mots.get(original.id) ?? null}
-            colonne={glisse.colonneOrigine}
-            place={false}
-            cache
+            key={`${segment.id}@${segment.premiere}`}
+            section={section}
+            segment={segment}
+            emplacement={pagination.emplacements.get(segment.id)}
+            etiquettePartie={etiquettes.get(section.partie) ?? section.partie}
+            mots={mots.get(section.id) ?? null}
+            colonne={colonne}
+            place={glisse?.mode === 'clavier' && glisse.id === section.id}
+            source={auPointeur && glisse.id === section.id}
+            insertion={insertion}
             actions={actions}
           />
-        ),
-      ]}
+        )
+      })}
     </div>
   )
 }
@@ -379,4 +368,12 @@ function positionSousPointeur(x: number, y: number): PositionPointeur | null {
     }
   }
   return null
+}
+
+function pagesEnToutesLettres(e: { premiere: number; derniere: number }): string {
+  return e.premiere === e.derniere ? `page ${e.premiere}` : `pages ${e.premiere} à ${e.derniere}`
+}
+
+function pagesAbregees(e: { premiere: number; derniere: number }): string {
+  return e.premiere === e.derniere ? `p. ${e.premiere}` : `p. ${e.premiere}-${e.derniere}`
 }

@@ -6,12 +6,14 @@ import {
   deplacer,
   modifierReglages,
   modifierSection,
+  nouveauPlan,
   nouvelId,
   restaurerSection,
   supprimerSection,
   viderCorbeille,
 } from './operations'
-import { lirePlan, serialiserPlan, validerPlan, type Plan, type SectionTexte } from './plan'
+import { MODELE_PAR_DEFAUT, modelePourTitre, modeleValide } from './compilation'
+import { lirePlan, reglesTypo, serialiserPlan, validerPlan, type Plan, type SectionTexte } from './plan'
 
 const texteExemple = lireExemple()['plan.json'] ?? ''
 const exemple = (): Plan => lirePlan(texteExemple)
@@ -192,5 +194,40 @@ describe('page blanche', () => {
       resume: '',
     })
     expect(() => validerPlan(JSON.parse(serialiserPlan(plan)))).not.toThrow()
+  })
+})
+
+describe('nouveau livre', () => {
+  it('un plan valide : parties dans l’ordre, aucune section, nom des compilations tiré du titre', () => {
+    const plan = nouveauPlan({
+      titre: ' Les Ombres de l’Été ',
+      pagesTotal: 96,
+      motsParPage: 320,
+      parties: ['Prologue', '', 'Les règles', 'Les règles'],
+    })
+    expect(lirePlan(serialiserPlan(plan))).toEqual(plan)
+    expect(plan.livre).toEqual({ titre: 'Les Ombres de l’Été', pagesTotal: 96, motsParPage: 320, premierePage: 'droite' })
+    expect(plan.parties.map((p) => [p.id, p.titre])).toEqual([
+      ['prologue', 'Prologue'],
+      ['les-regles', 'Les règles'],
+      ['les-regles-2', 'Les règles'],
+    ])
+    expect(plan.sections).toEqual([])
+    expect(plan.reglages?.compilation?.modele).toBe('Les_Ombres_de_l_Ete__v{n}.md')
+  })
+
+  it('reprend les règles typographiques qu’on lui donne', () => {
+    const typo = { ...reglesTypo(exemple()), espaceFine: true }
+    expect(nouveauPlan({ titre: 'X', pagesTotal: 10, motsParPage: 300, parties: ['A'] }, typo).reglages?.typographie).toEqual(typo)
+  })
+
+  it('sans partie saisie, une « Première partie »', () => {
+    const plan = nouveauPlan({ titre: 'X', pagesTotal: 10, motsParPage: 300, parties: ['  '] })
+    expect(plan.parties).toEqual([{ id: 'partie', titre: 'Première partie', numerotee: true }])
+  })
+
+  it('« Katastrophê » donne le modèle par défaut', () => {
+    expect(modelePourTitre('Katastrophê')).toBe(MODELE_PAR_DEFAUT)
+    expect(modeleValide(modelePourTitre('???'))).toBe(true)
   })
 })
