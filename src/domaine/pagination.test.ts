@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { lireExemple } from '../test/exemple'
-import { cibleInsertion } from './glisser'
+import { cibleInsertion, ciblePartie } from './glisser'
 import { construireGrille } from './grille'
 import { coteDeLaPage, paginer } from './pagination'
 import { lirePlan, type Debut } from './plan'
@@ -112,55 +112,108 @@ describe('construireGrille', () => {
 })
 
 describe('cibleInsertion', () => {
-  // a(1) b(3) c(1) d(1) → a:1, b:2-4, c:5, d:6
-  const ordre = [s('a', 1), s('b', 3), s('c', 1), s('d', 1)]
+  // a(1) b(3) c(1) d(1) → a:1, b:2-4, c:5, d:6. Parties : p (a, b), q (c, d), puis r, vide.
+  const ordre = [s('a', 1), s('b', 3), { ...s('c', 1), partie: 'q' }, { ...s('d', 1), partie: 'q' }]
+  const parties = [{ id: 'p' }, { id: 'q' }, { id: 'r' }]
   const pagination = paginer(ordre, 'droite')
 
   function cible(idGlisse: string, page: number, fraction = 0.5) {
-    return cibleInsertion(ordre, pagination, idGlisse, { type: 'page', page, fraction })
+    return cibleInsertion(ordre, parties, pagination, idGlisse, { type: 'page', page, fraction })
   }
 
   it('reste en place au-dessus de sa propre position, sans ligne', () => {
-    expect(cible('a', 1)).toEqual({ index: 0, repere: null })
-    expect(cible('b', 3)).toEqual({ index: 1, repere: null })
+    expect(cible('a', 1)).toEqual({ index: 0, partie: 'p', repere: null })
+    expect(cible('b', 3)).toEqual({ index: 1, partie: 'p', repere: null })
   })
 
   it('s’insère avant une section si l’on est sur sa première moitié : ligne à son bord gauche', () => {
-    expect(cible('d', 2, 0.1)).toEqual({ index: 1, repere: { id: 'b', cote: 'avant' } })
+    expect(cible('d', 2, 0.1)).toEqual({ index: 1, partie: 'p', repere: { type: 'postit', id: 'b', cote: 'avant' } })
   })
 
   it('s’insère après une section si l’on est sur sa seconde moitié : ligne à son bord droit', () => {
-    expect(cible('d', 4, 0.5)).toEqual({ index: 2, repere: { id: 'b', cote: 'apres' } })
+    expect(cible('d', 4, 0.5)).toEqual({ index: 2, partie: 'p', repere: { type: 'postit', id: 'b', cote: 'apres' } })
   })
 
-  it('juste avant ou juste après sa propre place : rien ne change, pas de ligne', () => {
-    // b est entre a et c : fin de a ou début de c reviennent à ne pas bouger.
-    expect(cible('b', 1, 0.8)).toEqual({ index: 1, repere: null })
-    expect(cible('b', 5, 0.2)).toEqual({ index: 1, repere: null })
+  it('juste avant ou juste après sa propre place, dans sa partie : rien ne change', () => {
+    expect(cible('b', 1, 0.8)).toEqual({ index: 1, partie: 'p', repere: null })
   })
 
-  it('la grille ne bouge pas : la cible ne dépend que du pointeur', () => {
-    // a glissé sur la fin de b (page 4) → après b, à chaque mouvement.
-    expect(cible('a', 4, 0.8)).toEqual({ index: 1, repere: { id: 'b', cote: 'apres' } })
-    expect(cible('a', 4, 0.9)).toEqual({ index: 1, repere: { id: 'b', cote: 'apres' } })
+  it('à la frontière de deux parties, le côté de la ligne dit la partie d’arrivée', () => {
+    // b est la dernière de p : sur le début de c, elle passe dans q sans changer de rang.
+    expect(cible('b', 5, 0.2)).toEqual({ index: 1, partie: 'q', repere: { type: 'postit', id: 'c', cote: 'avant' } })
+    // c est la première de q : sur la fin de b, elle passe dans p.
+    expect(cible('c', 4, 0.9)).toEqual({ index: 2, partie: 'p', repere: { type: 'postit', id: 'b', cote: 'apres' } })
   })
 
   it('va en fin de grille sur une page libre : ligne après la dernière section', () => {
-    expect(cibleInsertion(ordre, pagination, 'a', { type: 'fin' })).toEqual({
+    expect(cibleInsertion(ordre, parties, pagination, 'a', { type: 'fin' })).toEqual({
       index: 3,
-      repere: { id: 'd', cote: 'apres' },
+      partie: 'q',
+      repere: { type: 'postit', id: 'd', cote: 'apres' },
     })
-    // La dernière section déjà en fin : rien ne change.
-    expect(cibleInsertion(ordre, pagination, 'd', { type: 'fin' })).toEqual({ index: 3, repere: null })
+    expect(cibleInsertion(ordre, parties, pagination, 'd', { type: 'fin' })).toEqual({ index: 3, partie: 'q', repere: null })
+  })
+
+  it('sur le bandeau d’une partie : en tête de cette partie, ou dans la partie vide', () => {
+    expect(cibleInsertion(ordre, parties, pagination, 'a', { type: 'partie', partie: 'q' })).toEqual({
+      index: 1,
+      partie: 'q',
+      repere: { type: 'partie', id: 'q' },
+    })
+    expect(cibleInsertion(ordre, parties, pagination, 'a', { type: 'partie', partie: 'r' })).toEqual({
+      index: 3,
+      partie: 'r',
+      repere: { type: 'partie', id: 'r' },
+    })
   })
 
   it('une page blanche vaut le début de la section qui la suit', () => {
     const avecBlanche = [s('a', 2), s('b', 2, 'gauche'), s('c', 1)]
     // a:1-2, blanche 3, b:4-5, c:6 ; on glisse c au-dessus de la blanche.
     const p = paginer(avecBlanche, 'droite')
-    expect(cibleInsertion(avecBlanche, p, 'c', { type: 'page', page: 3, fraction: 0.5 })).toEqual({
+    expect(cibleInsertion(avecBlanche, [{ id: 'p' }], p, 'c', { type: 'page', page: 3, fraction: 0.5 })).toEqual({
       index: 1,
-      repere: { id: 'b', cote: 'avant' },
+      partie: 'p',
+      repere: { type: 'postit', id: 'b', cote: 'avant' },
+    })
+  })
+})
+
+describe('ciblePartie', () => {
+  // p : a(1) b(3) → pages 1-4 ; q : c(1) d(1) → 5-6 ; r vide.
+  const ordre = [s('a', 1), s('b', 3), { ...s('c', 1), partie: 'q' }, { ...s('d', 1), partie: 'q' }]
+  const parties = [{ id: 'p' }, { id: 'q' }, { id: 'r' }]
+  const pagination = paginer(ordre, 'droite')
+  const cible = (id: string, page: number, fraction = 0.5) =>
+    ciblePartie(ordre, parties, pagination, id, { type: 'page', page, fraction })
+
+  it('sur la première moitié d’une partie : avant elle, ligne au bord gauche de sa première section', () => {
+    expect(cible('q', 1, 0.5)).toEqual({ index: 0, voisine: { id: 'p', cote: 'avant' }, repere: { type: 'postit', id: 'a', cote: 'avant' } })
+  })
+
+  it('sur la seconde moitié : après elle, ligne au bord droit de sa dernière section', () => {
+    expect(cible('p', 6, 0.5)).toEqual({ index: 1, voisine: { id: 'q', cote: 'apres' }, repere: { type: 'postit', id: 'd', cote: 'apres' } })
+  })
+
+  it('sur elle-même, ou à sa propre place : rien ne change', () => {
+    expect(cible('p', 2)).toEqual({ index: 0, voisine: null, repere: null })
+    // Avant q, c'est déjà là que se trouve p.
+    expect(cible('p', 5, 0.1)).toEqual({ index: 0, voisine: null, repere: null })
+  })
+
+  it('sur le bandeau d’une partie vide : avant elle, bandeau signalé', () => {
+    expect(ciblePartie(ordre, parties, pagination, 'p', { type: 'partie', partie: 'r' })).toEqual({
+      index: 1,
+      voisine: { id: 'r', cote: 'avant' },
+      repere: { type: 'partie', id: 'r' },
+    })
+  })
+
+  it('en fin de grille : après la dernière partie', () => {
+    expect(ciblePartie(ordre, parties, pagination, 'p', { type: 'fin' })).toEqual({
+      index: 2,
+      voisine: { id: 'r', cote: 'apres' },
+      repere: { type: 'partie', id: 'r' },
     })
   })
 })

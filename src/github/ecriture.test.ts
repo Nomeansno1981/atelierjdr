@@ -88,7 +88,7 @@ describe('changementsFichiers', () => {
 
   it('reprend un fichier orphelin au lieu de l’écraser', async () => {
     const arbre = await arbreDe({ ...exemple, 'sections/brouillon.md': 'Du texte précieux.' })
-    const local = creerSection(planExemple(), { type: 'texte', titre: 'Brouillon', partie: 'regles', pages: 1 }, 0, 'zzz111')
+    const local = creerSection(planExemple(), { type: 'texte', titre: 'Brouillon', partie: 'presentation', pages: 1 }, 0, 'zzz111')
     const { entrees, plan } = changementsFichiers(planExemple(), local, arbre)
     expect(entrees).toEqual([])
     expect((plan.sections[0] as SectionTexte).fichier).toBe('sections/brouillon.md')

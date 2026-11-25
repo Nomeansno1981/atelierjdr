@@ -10,6 +10,19 @@ import {
   supprimerSection,
 } from '../../domaine/operations'
 import { paginer, type Pagination } from '../../domaine/pagination'
+import {
+  deplacerPartie,
+  estRegroupe,
+  finDePartie,
+  fusionnerPartie,
+  modifierPartie,
+  nouvellePartie,
+  regrouper,
+  sectionsDeplaceesParRegroupement,
+  supprimerPartie,
+  voisineDeFusion,
+} from '../../domaine/parties'
+import { numerosDesParties } from '../../domaine/romains'
 import { LIBELLES_STATUT, reglesTypo, STATUTS, type Plan } from '../../domaine/plan'
 import { normaliser } from '../../domaine/typographie/normaliser'
 import type { ReglesTypo } from '../../domaine/typographie/regles'
@@ -26,6 +39,7 @@ import { formaterNombre, motsParSection, type MotsSection } from './format'
 import { Grille } from './Grille'
 import { PanneauCorbeille } from './PanneauCorbeille'
 import { PanneauCreation } from './PanneauCreation'
+import { PanneauPartie } from './PanneauPartie'
 import { PanneauReglages } from './PanneauReglages'
 import { PanneauSection } from './PanneauSection'
 
@@ -35,7 +49,9 @@ type Panneau =
   | { type: 'section'; id: string }
   | { type: 'recherche' }
   | { type: 'compilation' }
-  | { type: 'creation'; index: number }
+  /** placePartie : où commencerait une nouvelle partie (null : on n'en propose pas). */
+  | { type: 'creation'; index: number; partie: string; placePartie: 'ici' | 'fin' | null }
+  | { type: 'partie'; id: string }
   | { type: 'corbeille' }
   | { type: 'reglages' }
   | { type: 'livres' }
@@ -64,6 +80,8 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
   const menu = useRef<HTMLDetailsElement>(null)
 
   const mots = useMemo(() => motsParSection(plan, textes ?? new Map<string, string>()), [plan, textes])
+  const regroupe = useMemo(() => estRegroupe(plan), [plan])
+  const titrePartie = (id: string) => plan.parties.find((p) => p.id === id)?.titre ?? id
   const pagination = useMemo(() => paginer(plan.sections, plan.livre.premierePage), [plan.sections, plan.livre.premierePage])
 
   // Le bandeau « Section supprimée. Annuler » reste 10 secondes.
@@ -140,6 +158,7 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
   }
 
   const sectionOuverte = panneau?.type === 'section' ? plan.sections.find((s) => s.id === panneau.id) : undefined
+  const partieOuverte = panneau?.type === 'partie' ? plan.parties.find((p) => p.id === panneau.id) : undefined
 
   return (
     <div className="mode-plan" data-zoom={zoom}>
@@ -283,10 +302,22 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
         }}
       />
 
+      {!regroupe && <BandeauRegroupement plan={plan} regrouper={() => { atelier.modifierPlan(regrouper, 'regroupement des parties') }} />}
+
       <main className="contenu-plan">
         <Grille
           plan={plan}
           mots={mots}
+          regroupe={regroupe}
+          creerDansPartie={(partie) => {
+            setPanneau({ type: 'creation', index: finDePartie(plan, partie), partie, placePartie: null })
+          }}
+          ouvrirPartie={(id) => {
+            setPanneau({ type: 'partie', id })
+          }}
+          deplacerPartie={(id, index) => {
+            atelier.modifierPlan((p) => deplacerPartie(p, id, index), `déplacement de la partie ${titrePartie(id)}`)
+          }}
           ouvrir={(id) => {
             // Une section de texte s'ouvre dans l'éditeur ; un hors-texte, dans son panneau.
             const s = plan.sections.find((x) => x.id === id)
@@ -303,17 +334,18 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
             atelier.modifierPlan((p) => changerPages(p, id, delta), `${s.titre} sur ${n} page${n > 1 ? 's' : ''}`)
           }}
           creer={(index) => {
-            setPanneau({ type: 'creation', index })
+            const partie = plan.sections[index]?.partie ?? plan.parties.at(-1)?.id ?? ''
+            setPanneau({ type: 'creation', index, partie, placePartie: index < plan.sections.length ? 'ici' : 'fin' })
           }}
-          deplacer={(id, index) => {
+          deplacer={(id, index, partie) => {
             const avant = plan.sections.find((x) => x.id === id)?.partie
-            const apres = deplacer(plan, id, index).sections.find((x) => x.id === id)?.partie
+            const apres = deplacer(plan, id, index, partie).sections.find((x) => x.id === id)?.partie
             const nouvelle = plan.parties.find((p) => p.id === apres)?.titre
             const description =
               apres !== avant && nouvelle
                 ? `déplacement de ${titre(id)} dans la partie ${nouvelle}`
                 : `déplacement de ${titre(id)}`
-            atelier.modifierPlan((p) => deplacer(p, id, index), description)
+            atelier.modifierPlan((p) => deplacer(p, id, index, partie), description)
           }}
         />
       </main>
@@ -365,12 +397,58 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
       {panneau?.type === 'creation' && (
         <PanneauCreation
           plan={plan}
-          index={panneau.index}
+          partie={panneau.partie}
+          placePartie={panneau.placePartie}
+          creerPartie={(nouvelle) => {
+            const propre = { ...nouvelle, titre: typo(nouvelle.titre) }
+            const avant = plan.sections[panneau.index]?.id ?? null
+            atelier.modifierPlan((p) => nouvellePartie(p, propre, avant), `création de la partie ${propre.titre.trim()}`)
+            setPanneau(null)
+          }}
           creer={(nouvelle) => {
             const propre = { ...nouvelle, titre: typo(nouvelle.titre) }
             atelier.modifierPlan(
               (p) => creerSection(p, propre, panneau.index, nouvelId(p)),
               `création de ${propre.titre.trim()}`,
+            )
+            setPanneau(null)
+          }}
+          fermer={() => {
+            setPanneau(null)
+          }}
+        />
+      )}
+      {panneau?.type === 'partie' && partieOuverte && (
+        <PanneauPartie
+          key={partieOuverte.id}
+          plan={plan}
+          partie={partieOuverte}
+          numero={numerosDesParties(plan.parties).get(partieOuverte.id)}
+          regroupe={regroupe}
+          valider={(modif) => {
+            const propre = { ...modif, titre: typo(modif.titre) }
+            atelier.modifierPlan(
+              (p) => modifierPartie(p, partieOuverte.id, propre),
+              `modification de la partie ${propre.titre.trim() || partieOuverte.titre}`,
+            )
+            setPanneau(null)
+          }}
+          deplacer={(index) => {
+            atelier.modifierPlan(
+              (p) => deplacerPartie(p, partieOuverte.id, index),
+              `déplacement de la partie ${partieOuverte.titre}`,
+            )
+            setPanneau(null)
+          }}
+          supprimer={() => {
+            atelier.modifierPlan((p) => supprimerPartie(p, partieOuverte.id), `suppression de la partie ${partieOuverte.titre}`)
+            setPanneau(null)
+          }}
+          fusionner={() => {
+            const voisine = voisineDeFusion(plan, partieOuverte.id)
+            atelier.modifierPlan(
+              (p) => fusionnerPartie(p, partieOuverte.id),
+              `fusion de la partie ${partieOuverte.titre} dans ${voisine?.titre ?? ''}`,
             )
             setPanneau(null)
           }}
@@ -494,6 +572,25 @@ function BarreEtat({
           {pagesTotal} pages : pas un multiple de 4
         </p>
       )}
+    </div>
+  )
+}
+
+/** Un plan dont les parties ne se suivent pas : on dit ce qui changerait, et on propose de regrouper. */
+function BandeauRegroupement({ plan, regrouper }: { plan: Plan; regrouper: () => void }) {
+  const deplacees = sectionsDeplaceesParRegroupement(plan)
+  const n = deplacees.length
+  return (
+    <div className="bandeau bandeau-attention bandeau-regroupement" role="status">
+      <p>
+        Les parties ne se suivent pas dans la grille : une partie est en plusieurs morceaux, ou leur numérotation ne
+        suit pas leur ordre. « Regrouper » rassemble chaque partie à la place de sa première section
+        {n > 0 ? ` ; ${n} section${n > 1 ? 's changent' : ' change'} de place : ${deplacees.join(', ')}.` : '.'} Cela
+        s’annule comme toute opération.
+      </p>
+      <button type="button" className="bouton-principal" onClick={regrouper}>
+        Regrouper
+      </button>
     </div>
   )
 }

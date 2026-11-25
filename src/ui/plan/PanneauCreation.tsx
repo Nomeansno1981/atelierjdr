@@ -1,61 +1,69 @@
 import { useId, useState, type SubmitEvent } from 'react'
 import type { NouvelleSection } from '../../domaine/operations'
+import type { NouvellePartie } from '../../domaine/parties'
 import type { Plan } from '../../domaine/plan'
 import { Dialogue } from '../commun/Dialogue'
 
 interface Proprietes {
   plan: Plan
-  /** Position de la nouvelle section dans l'ordre du plan. */
-  index: number
+  /** Partie où la section sera créée : celle de la place choisie. */
+  partie: string
+  /**
+   * Où une nouvelle partie commencerait : avant une section, ou en fin de
+   * livre. null : on ne propose pas de partie (depuis une partie vide).
+   */
+  placePartie: 'ici' | 'fin' | null
   creer: (nouvelle: NouvelleSection) => void
+  creerPartie: (nouvelle: NouvellePartie) => void
   fermer: () => void
 }
 
-export function PanneauCreation({ plan, index, creer, fermer }: Proprietes) {
-  // Par défaut, la partie de la section précédente (ou suivante, en tête de grille).
-  const voisine = plan.sections[index - 1] ?? plan.sections[index]
-  const [type, setType] = useState<NouvelleSection['type']>('texte')
+type Type = NouvelleSection['type'] | 'partie'
+
+export function PanneauCreation({ plan, partie, placePartie, creer, creerPartie, fermer }: Proprietes) {
+  const [type, setType] = useState<Type>('texte')
   const [titre, setTitre] = useState('')
-  const [partie, setPartie] = useState(voisine?.partie ?? plan.parties[0]?.id ?? '')
   const [pages, setPages] = useState('1')
+  const [numerotee, setNumerotee] = useState(true)
   const id = useId()
+  const nomPartie = plan.parties.find((p) => p.id === partie)?.titre ?? partie
 
   function envoyer(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (type === 'partie') {
+      if (titre.trim() === '') return
+      creerPartie({ titre, numerotee })
+      return
+    }
     if (titre.trim() === '' && type !== 'blanche') return
     creer({ type, titre, partie, pages: Math.max(1, Number.parseInt(pages, 10) || 1) })
   }
 
+  const choix = (valeur: Type, libelle: string, aide?: string) => (
+    <label>
+      <input type="radio" name="type" checked={type === valeur} onChange={() => { setType(valeur) }} />
+      {libelle}
+      {aide && <span className="aide"> ({aide})</span>}
+    </label>
+  )
+
   return (
-    <Dialogue titre="Nouvelle section" onFermer={fermer}>
+    <Dialogue titre={type === 'partie' ? 'Nouvelle partie' : 'Nouvelle section'} onFermer={fermer}>
       <form className="formulaire" onSubmit={envoyer}>
         <fieldset className="choix-type">
           <legend>Type</legend>
-          <label>
-            <input type="radio" name="type" checked={type === 'texte'} onChange={() => { setType('texte') }} />
-            Texte
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="type"
-              checked={type === 'hors-texte'}
-              onChange={() => { setType('hors-texte') }}
-            />
-            Hors-texte <span className="aide">(illustration, page de titre, fiche…)</span>
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="type"
-              checked={type === 'blanche'}
-              onChange={() => { setType('blanche') }}
-            />
-            Page blanche <span className="aide">(laissée blanche à dessein)</span>
-          </label>
+          {choix('texte', 'Texte')}
+          {choix('hors-texte', 'Hors-texte', 'illustration, page de titre, fiche…')}
+          {choix('blanche', 'Page blanche', 'laissée blanche à dessein')}
+          {placePartie &&
+            choix(
+              'partie',
+              'Partie',
+              placePartie === 'ici' ? 'elle commence ici et reprend la suite de la partie' : 'à la fin du livre',
+            )}
         </fieldset>
 
-        <label htmlFor={`${id}-titre`}>Titre</label>
+        <label htmlFor={`${id}-titre`}>{type === 'partie' ? 'Titre de la partie' : 'Titre'}</label>
         <input
           id={`${id}-titre`}
           value={titre}
@@ -65,18 +73,13 @@ export function PanneauCreation({ plan, index, creer, fermer }: Proprietes) {
           autoFocus
         />
 
-        <div className="champs-2">
-          <div>
-            <label htmlFor={`${id}-partie`}>Partie</label>
-            <select id={`${id}-partie`} value={partie} onChange={(e) => { setPartie(e.target.value) }}>
-              {plan.parties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.titre}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
+        {type === 'partie' ? (
+          <label className="case">
+            <input type="checkbox" checked={numerotee} onChange={(e) => { setNumerotee(e.target.checked) }} />
+            Numérotée (Partie I, II…)
+          </label>
+        ) : (
+          <>
             <label htmlFor={`${id}-pages`}>Pages</label>
             <input
               id={`${id}-pages`}
@@ -87,8 +90,9 @@ export function PanneauCreation({ plan, index, creer, fermer }: Proprietes) {
               onChange={(e) => { setPages(e.target.value) }}
               required
             />
-          </div>
-        </div>
+            <p className="aide">Dans la partie « {nomPartie} ».</p>
+          </>
+        )}
 
         <div className="actions-formulaire">
           <span className="espace" />

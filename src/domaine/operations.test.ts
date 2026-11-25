@@ -96,8 +96,9 @@ describe('opérations', () => {
 
   it('crée un hors-texte sans fichier', () => {
     const plan = creerSection(exemple(), { type: 'hors-texte', titre: 'Fiche', partie: 'regles', pages: 1 }, 99, 'zzz111')
-    expect(plan.sections.at(-1)).toMatchObject({ id: 'zzz111', type: 'hors-texte' })
-    expect('fichier' in (plan.sections.at(-1) ?? {})).toBe(false)
+    // Demandée en fin de grille mais dans « Les règles » : elle se range à la fin de sa partie, avant le Lexique.
+    expect(plan.sections.at(-2)).toMatchObject({ id: 'zzz111', type: 'hors-texte' })
+    expect('fichier' in (plan.sections.at(-2) ?? {})).toBe(false)
   })
 
   it('envoie à la corbeille avec date, position et fichier déplacé', () => {

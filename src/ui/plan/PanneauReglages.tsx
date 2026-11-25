@@ -1,7 +1,7 @@
 import { useId, useState, type SubmitEvent } from 'react'
 import { MODELE_PAR_DEFAUT, modeleValide } from '../../domaine/compilation'
-import { nouvelIdPartie, type Reglages } from '../../domaine/operations'
-import { reglesTypo, type Partie, type Plan } from '../../domaine/plan'
+import type { Reglages } from '../../domaine/operations'
+import { reglesTypo, type Plan } from '../../domaine/plan'
 import type { ReglesTypo } from '../../domaine/typographie/regles'
 import { Dialogue } from '../commun/Dialogue'
 import { afficherInsecables, useInsecablesVisibles } from '../preferences'
@@ -28,29 +28,10 @@ export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDe
   const [titre, setTitre] = useState(plan.livre.titre)
   const [pagesTotal, setPagesTotal] = useState(String(plan.livre.pagesTotal))
   const [motsParPage, setMotsParPage] = useState(String(plan.livre.motsParPage))
-  const [parties, setParties] = useState<Partie[]>(plan.parties)
   const [typographie, setTypographie] = useState<ReglesTypo>(reglesTypo(plan))
   const [modele, setModele] = useState(plan.reglages?.compilation?.modele ?? MODELE_PAR_DEFAUT)
   const insecablesVisibles = useInsecablesVisibles()
   const id = useId()
-  const utilisees = new Set(plan.sections.map((s) => s.partie))
-
-  function changerPartie(index: number, modif: Partial<Partie>) {
-    setParties((ps) => ps.map((p, i) => (i === index ? { ...p, ...modif } : p)))
-  }
-
-  function deplacerPartie(index: number, sens: -1 | 1) {
-    setParties((ps) => {
-      const cible = index + sens
-      const a = ps[index]
-      const b = ps[cible]
-      if (!a || !b) return ps
-      const copie = [...ps]
-      copie[index] = b
-      copie[cible] = a
-      return copie
-    })
-  }
 
   function envoyer(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -58,7 +39,6 @@ export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDe
       titre,
       pagesTotal: Number.parseInt(pagesTotal, 10) || plan.livre.pagesTotal,
       motsParPage: Number.parseInt(motsParPage, 10) || plan.livre.motsParPage,
-      parties: parties.map((p) => ({ ...p, titre: p.titre.trim() || 'Sans titre' })),
       typographie,
       // Le modèle n'est écrit dans plan.json que s'il diffère de celui par défaut.
       ...(modele !== (plan.reglages?.compilation?.modele ?? MODELE_PAR_DEFAUT) ? { modeleCompilation: modele } : {}),
@@ -109,72 +89,10 @@ export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDe
           </div>
         </div>
 
-        <fieldset className="parties">
-          <legend>Parties, dans l’ordre</legend>
-          {parties.map((p, i) => (
-            <div key={p.id} className="ligne-partie">
-              <input
-                aria-label={`Titre de la partie ${i + 1}`}
-                value={p.titre}
-                onChange={(e) => {
-                  changerPartie(i, { titre: e.target.value })
-                }}
-              />
-              <label className="case">
-                <input
-                  type="checkbox"
-                  checked={p.numerotee}
-                  onChange={(e) => {
-                    changerPartie(i, { numerotee: e.target.checked })
-                  }}
-                />
-                Numérotée
-              </label>
-              <button
-                type="button"
-                className="bouton-icone"
-                aria-label={`Monter ${p.titre}`}
-                disabled={i === 0}
-                onClick={() => {
-                  deplacerPartie(i, -1)
-                }}
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                className="bouton-icone"
-                aria-label={`Descendre ${p.titre}`}
-                disabled={i === parties.length - 1}
-                onClick={() => {
-                  deplacerPartie(i, 1)
-                }}
-              >
-                ↓
-              </button>
-              <button
-                type="button"
-                className="bouton-icone"
-                aria-label={`Retirer ${p.titre}`}
-                title={utilisees.has(p.id) ? 'Cette partie contient des sections' : 'Retirer'}
-                disabled={utilisees.has(p.id) || parties.length === 1}
-                onClick={() => {
-                  setParties((ps) => ps.filter((_, j) => j !== i))
-                }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => {
-              setParties((ps) => [...ps, { id: nouvelIdPartie('Nouvelle partie', ps), titre: 'Nouvelle partie', numerotee: true }])
-            }}
-          >
-            Ajouter une partie
-          </button>
-        </fieldset>
+        <p className="aide">
+          Les parties se créent, se renomment et se déplacent directement dans la grille : touchez ou glissez leur
+          bandeau.
+        </p>
 
         <label htmlFor={`${id}-modele`}>Nom des compilations</label>
         <input

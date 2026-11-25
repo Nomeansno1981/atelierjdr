@@ -71,13 +71,15 @@ test('créer un livre dans un dépôt vide depuis l’Atelier', async ({ page })
   expect(plan.parties.map((p) => p.titre)).toEqual(['Prologue', 'Le monde', 'Annexes'])
   expect(plan.reglages?.compilation?.modele).toBe('Les_Ombres__v{n}.md')
 
-  // On y crée sa première section, dans la première partie.
-  await page.getByRole('button', { name: 'Nouvelle section' }).click()
+  // Les trois parties, vides, sont là ; on crée la première section dans la première.
+  await expect(page.locator('.separateur-vide')).toHaveText(['I. Prologue · vide', 'II. Le monde · vide', 'III. Annexes · vide'])
+  await page.getByRole('button', { name: 'Nouvelle section dans Prologue' }).click()
   const creation = page.getByRole('dialog', { name: 'Nouvelle section' })
   await creation.getByRole('textbox', { name: 'Titre' }).fill('Ouverture')
   await creation.getByRole('button', { name: 'Créer' }).click()
   await expect(postit(page, 'Ouverture')).toBeVisible()
   await expect(page.locator('.separateur').first()).toHaveText('I. Prologue')
+  await expect(page.locator('.separateur-vide')).toHaveText(['II. Le monde · vide', 'III. Annexes · vide'])
   // GitHub signale un dépôt sans commit par une réponse 409, que le
   // navigateur note dans la console : c'est attendu.
   expect(erreurs.filter((e) => !e.includes('status of 409'))).toEqual([])

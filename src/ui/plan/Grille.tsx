@@ -1,63 +1,90 @@
 import {
   DndContext,
   DragOverlay,
+  useDraggable,
   useSensor,
   useSensors,
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { getEventCoordinates } from '@dnd-kit/utilities'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { cibleInsertion, type PositionPointeur, type Repere } from '../../domaine/glisser'
+import { cibleInsertion, ciblePartie, type PositionPointeur, type Repere } from '../../domaine/glisser'
 import { construireGrille, type PageGrille, type Planche } from '../../domaine/grille'
 import { deplacer as deplacerSection, ordreAvecDeplacement } from '../../domaine/operations'
 import { paginer, type Pagination } from '../../domaine/pagination'
-import type { Plan, Section } from '../../domaine/plan'
+import { partiesVidesAvant } from '../../domaine/parties'
+import type { Partie, Plan, Section } from '../../domaine/plan'
 import { numerosDesParties } from '../../domaine/romains'
 import { IconePlus } from '../commun/icones'
-import { CapteurSouris, CapteurTactile } from './capteurs'
+import { ATTRIBUT_SANS_GLISSER, CapteurSouris, CapteurTactile } from './capteurs'
 import type { MotsSection } from './format'
 import { FantomePostIt, PostIt, type ActionsPostIt } from './PostIt'
 
 export interface ProprietesGrille {
   plan: Plan
   mots: ReadonlyMap<string, MotsSection>
+  /** Les parties se suivent dans l'ordre : on peut les glisser. */
+  regroupe: boolean
   ouvrir: (id: string) => void
   modifier: (id: string) => void
   changerPages: (id: string, delta: number) => void
   /** Nouvelle section à cet index de l'ordre. */
   creer: (index: number) => void
-  deplacer: (id: string, index: number) => void
+  /** Nouvelle section dans une partie vide. */
+  creerDansPartie: (partie: string) => void
+  /** Déplace une section ; `partie` : partie d'arrivée, si on la connaît. */
+  deplacer: (id: string, index: number, partie?: string) => void
+  ouvrirPartie: (id: string) => void
+  deplacerPartie: (id: string, index: number) => void
 }
 
+/** Ce que l'on glisse : un post-it, ou une partie entière (au pointeur seulement). */
 interface Glissement {
+  type: 'section' | 'partie'
   id: string
-  /** Index d'insertion, compté dans l'ordre sans la section glissée. */
+  /**
+   * Section : index d'insertion, compté dans l'ordre sans elle. Partie :
+   * index dans la liste des parties, comptée sans elle.
+   */
   index: number
+  /** Section : partie d'arrivée. */
+  partie: string
   /**
    * Au pointeur, la grille ne bouge pas : une ligne rouge marque l'endroit
-   * où le post-it s'insérera. Au clavier, il se déplace à sa place
+   * où l'élément s'insérera. Au clavier, le post-it se déplace à sa place
    * provisoire, qui reçoit le focus.
    */
   mode: 'pointeur' | 'clavier'
-  /** Bord du post-it où dessiner la ligne d'insertion (pointeur seulement). */
   repere: Repere | null
+  /** Partie : la voisine à l'arrivée ; null si rien ne change. */
+  voisine: { id: string; cote: 'avant' | 'apres' } | null
 }
 
 const COLONNE = { gauche: 1, droite: 2 } as const
+const PREFIXE_PARTIE = 'partie:'
 
-export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, deplacer }: ProprietesGrille) {
+interface ActionsBandeau {
+  ouvrir: (id: string) => void
+  creerDans: (id: string) => void
+}
+
+export function Grille(props: ProprietesGrille) {
+  const { plan, mots, regroupe, ouvrir, modifier, changerPages, creer, deplacer } = props
   const [glisse, setGlisse] = useState<Glissement | null>(null)
   const [annonce, setAnnonce] = useState('')
 
   // Au clavier, aperçu : la section à sa place provisoire, avec la partie
   // qu'elle y prendrait. Au pointeur, la grille reste telle qu'elle est.
   const ordre = useMemo(
-    () => (glisse?.mode === 'clavier' ? deplacerSection(plan, glisse.id, glisse.index).sections : plan.sections),
+    () =>
+      glisse?.mode === 'clavier' ? deplacerSection(plan, glisse.id, glisse.index).sections : plan.sections,
     [plan, glisse],
   )
   const pagination = useMemo(() => paginer(ordre, plan.livre.premierePage), [ordre, plan.livre.premierePage])
   const planches = useMemo(() => construireGrille(ordre, pagination, plan.livre), [ordre, pagination, plan.livre])
   const sections = useMemo(() => new Map(ordre.map((s) => [s.id, s])), [ordre])
+  const vides = useMemo(() => partiesVidesAvant({ parties: plan.parties, sections: ordre }), [plan.parties, ordre])
+  const parties = useMemo(() => new Map(plan.parties.map((p) => [p.id, p])), [plan.parties])
   const etiquettes = useMemo(() => {
     const numeros = numerosDesParties(plan.parties)
     return new Map(
@@ -67,6 +94,7 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
       }),
     )
   }, [plan.parties])
+  const titrePartie = (id: string) => titreDe(parties, id)
 
   // Valeurs courantes, lues par les gestionnaires d'événements.
   const courant = useRef({ ordre, pagination, glisse })
@@ -86,13 +114,18 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
   /** Où la section glissée arriverait : ses pages et sa partie à cette place. */
   const destination = useMemo(() => {
     if (!glisse) return null
-    const depart = plan.sections.findIndex((s) => s.id === glisse.id)
-    if (glisse.index === depart) return null
-    const apres = deplacerSection(plan, glisse.id, glisse.index)
+    if (glisse.type === 'partie') {
+      if (!glisse.voisine) return null
+      return `${glisse.voisine.cote === 'avant' ? 'avant' : 'après'} « ${titreDe(parties, glisse.voisine.id)} »`
+    }
+    if (!glisse.repere && glisse.mode === 'pointeur') return null
+    const apres = deplacerSection(plan, glisse.id, glisse.index, glisse.mode === 'pointeur' ? glisse.partie : undefined)
     const e = paginer(apres.sections, plan.livre.premierePage).emplacements.get(glisse.id)
     const partie = apres.sections.find((s) => s.id === glisse.id)?.partie
-    return { emplacement: e ?? null, partie: partie === undefined ? '' : (etiquettes.get(partie) ?? partie) }
-  }, [plan, glisse, etiquettes])
+    return [e && pagesAbregees(e), partie === undefined ? '' : (etiquettes.get(partie) ?? partie)]
+      .filter(Boolean)
+      .join(' · ')
+  }, [plan, glisse, etiquettes, parties])
 
   function annoncer(id: string, index: number) {
     const s = sections.get(id)
@@ -108,9 +141,21 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
     decalage.current = null
     if (image.current !== null) cancelAnimationFrame(image.current)
     if (!g) return
+    if (g.type === 'partie') {
+      if (valider && g.voisine) {
+        props.deplacerPartie(g.id, g.index)
+        setAnnonce(`Partie ${titrePartie(g.id)} déplacée.`)
+      } else {
+        setAnnonce(`Déplacement de la partie ${titrePartie(g.id)} annulé.`)
+      }
+      return
+    }
     const titre = sections.get(g.id)?.titre ?? ''
     const depart = plan.sections.findIndex((s) => s.id === g.id)
-    if (valider && g.index !== depart) {
+    if (g.mode === 'pointeur' && valider && g.repere) {
+      deplacer(g.id, g.index, g.partie)
+      setAnnonce(`${titre} déposé en position ${g.index + 1}, partie ${titrePartie(g.partie)}.`)
+    } else if (g.mode === 'clavier' && valider && g.index !== depart) {
       deplacer(g.id, g.index)
       setAnnonce(`${titre} déposé en position ${g.index + 1}.`)
     } else {
@@ -119,16 +164,39 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
   }
 
   function auDebut(e: DragStartEvent) {
-    const id = String(e.active.id)
+    const actif = String(e.active.id)
     const coordonnees = getEventCoordinates(e.activatorEvent)
     const cible = e.activatorEvent.target
-    const postit = cible instanceof Element ? cible.closest('.postit') : null
-    if (coordonnees && postit) {
-      const r = postit.getBoundingClientRect()
+    const element = cible instanceof Element ? cible.closest('.postit, .separateur') : null
+    if (coordonnees && element) {
+      const r = element.getBoundingClientRect()
       decalage.current = { x: coordonnees.x - r.left, y: coordonnees.y - r.top }
     }
-    setGlisse({ id, index: plan.sections.findIndex((s) => s.id === id), mode: 'pointeur', repere: null })
-    setAnnonce(`${sections.get(id)?.titre ?? ''} saisi.`)
+    if (actif.startsWith(PREFIXE_PARTIE)) {
+      const id = actif.slice(PREFIXE_PARTIE.length)
+      setGlisse({
+        type: 'partie',
+        id,
+        index: plan.parties.findIndex((p) => p.id === id),
+        partie: '',
+        mode: 'pointeur',
+        repere: null,
+        voisine: null,
+      })
+      setAnnonce(`Partie ${titrePartie(id)} saisie.`)
+      return
+    }
+    const section = plan.sections.find((s) => s.id === actif)
+    setGlisse({
+      type: 'section',
+      id: actif,
+      index: plan.sections.findIndex((s) => s.id === actif),
+      partie: section?.partie ?? '',
+      mode: 'pointeur',
+      repere: null,
+      voisine: null,
+    })
+    setAnnonce(`${section?.titre ?? ''} saisi.`)
   }
 
   function auMouvement() {
@@ -143,10 +211,14 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
       if (!g || !d || !r) return
       const position = positionSousPointeur(r.left + d.x, r.top + d.y)
       if (!position) return
-      const { index, repere } = cibleInsertion(courant.current.ordre, courant.current.pagination, g.id, position)
-      if (index !== g.index || repere?.id !== g.repere?.id || repere?.cote !== g.repere?.cote) {
-        setGlisse({ ...g, index, repere })
+      const { ordre: o, pagination: p } = courant.current
+      if (g.type === 'partie') {
+        const c = ciblePartie(o, plan.parties, p, g.id, position)
+        if (c.index !== g.index || !memeRepere(c.repere, g.repere)) setGlisse({ ...g, ...c })
+        return
       }
+      const c = cibleInsertion(o, plan.parties, p, g.id, position)
+      if (c.index !== g.index || c.partie !== g.partie || !memeRepere(c.repere, g.repere)) setGlisse({ ...g, ...c })
     })
   }
 
@@ -156,7 +228,7 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
       e.preventDefault()
       if (!g) {
         const index = plan.sections.findIndex((s) => s.id === id)
-        setGlisse({ id, index, mode: 'clavier', repere: null })
+        setGlisse({ type: 'section', id, index, partie: '', mode: 'clavier', repere: null, voisine: null })
         const titre = sections.get(id)?.titre ?? ''
         setAnnonce(
           `${titre} saisi, position ${index + 1} sur ${plan.sections.length}. Flèches pour déplacer, Espace ou Entrée pour déposer, Échap pour annuler.`,
@@ -199,7 +271,27 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
     },
     touche,
   }
-  const sectionGlissee = glisse ? sections.get(glisse.id) : undefined
+  const actionsBandeau: ActionsBandeau = {
+    ouvrir: (id) => {
+      if (!courant.current.glisse) props.ouvrirPartie(id)
+    },
+    creerDans: props.creerDansPartie,
+  }
+  const contexte: ContexteGrille = {
+    pagination,
+    sections,
+    etiquettes,
+    mots,
+    glisse,
+    actions,
+    actionsBandeau,
+    vides,
+    parties,
+    regroupe,
+  }
+  const sectionGlissee = glisse?.type === 'section' ? sections.get(glisse.id) : undefined
+  const partieGlissee = glisse?.type === 'partie' ? parties.get(glisse.id) : undefined
+  const videsEnFin = vides.get(null) ?? []
 
   return (
     <DndContext
@@ -228,17 +320,15 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
     >
       <div className={`planches${glisse ? ' en-glissement' : ''}`}>
         {planches.map((planche) => (
-          <VuePlanche
-            key={planche.cle}
-            planche={planche}
-            pagination={pagination}
-            sections={sections}
-            etiquettes={etiquettes}
-            mots={mots}
-            glisse={glisse}
-            actions={actions}
-          />
+          <VuePlanche key={planche.cle} planche={planche} contexte={contexte} />
         ))}
+        {videsEnFin.length > 0 && (
+          <div className="separateurs separateurs-fin">
+            {videsEnFin.map((p) => (
+              <BandeauPartie key={p.id} partie={p} vide contexte={contexte} />
+            ))}
+          </div>
+        )}
         <button
           type="button"
           className="ajout-fin"
@@ -256,15 +346,14 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
       <DragOverlay dropAnimation={null}>
         {glisse?.mode === 'pointeur' && sectionGlissee ? (
           <div ref={fantome} className="cadre-fantome" data-fantome="">
-            <FantomePostIt
-              section={sectionGlissee}
-              destination={
-                destination &&
-                [destination.emplacement && pagesAbregees(destination.emplacement), destination.partie]
-                  .filter(Boolean)
-                  .join(' · ')
-              }
-            />
+            <FantomePostIt section={sectionGlissee} destination={destination} />
+          </div>
+        ) : glisse?.mode === 'pointeur' && partieGlissee ? (
+          <div ref={fantome} className="cadre-fantome-partie" data-fantome="">
+            <div className="fantome-partie">
+              <span>{etiquettes.get(partieGlissee.id) ?? partieGlissee.titre}</span>
+              {destination && <span className="fantome-destination">{destination}</span>}
+            </div>
           </div>
         ) : null}
       </DragOverlay>
@@ -272,17 +361,22 @@ export function Grille({ plan, mots, ouvrir, modifier, changerPages, creer, depl
   )
 }
 
-interface ProprietesPlanche {
-  planche: Planche
+interface ContexteGrille {
   pagination: Pagination
   sections: ReadonlyMap<string, Section>
   etiquettes: ReadonlyMap<string, string>
   mots: ReadonlyMap<string, MotsSection>
   glisse: Glissement | null
   actions: ActionsPostIt
+  actionsBandeau: ActionsBandeau
+  /** Parties vides, par partie non vide qu'elles précèdent (null : en fin de livre). */
+  vides: ReadonlyMap<string | null, Partie[]>
+  parties: ReadonlyMap<string, Partie>
+  regroupe: boolean
 }
 
-function VuePlanche({ planche, pagination, sections, etiquettes, mots, glisse, actions }: ProprietesPlanche) {
+function VuePlanche({ planche, contexte }: { planche: Planche; contexte: ContexteGrille }) {
+  const { pagination, sections, etiquettes, mots, glisse, actions, vides, parties } = contexte
   const pages = [planche.gauche, planche.droite].filter((p): p is PageGrille => p !== null)
   const auPointeur = glisse?.mode === 'pointeur'
   const repere = auPointeur ? glisse.repere : null
@@ -292,11 +386,19 @@ function VuePlanche({ planche, pagination, sections, etiquettes, mots, glisse, a
       {pages.map((page) => {
         const colonne = COLONNE[page.cote]
         const classes = ['page', `page-${page.contenu.type}`, page.depasse ? 'page-depasse' : '']
+        const debut = page.debutPartie === null ? undefined : parties.get(page.debutPartie)
         return (
           <Fragment key={page.numero}>
             {page.debutPartie !== null && (
-              <div className="separateur" style={{ gridColumn: colonne }}>
-                {etiquettes.get(page.debutPartie) ?? page.debutPartie}
+              <div className="separateurs" style={{ gridColumn: colonne }}>
+                {(vides.get(page.debutPartie) ?? []).map((p) => (
+                  <BandeauPartie key={p.id} partie={p} vide contexte={contexte} />
+                ))}
+                {debut ? (
+                  <BandeauPartie partie={debut} vide={false} contexte={contexte} />
+                ) : (
+                  <div className="separateur">{page.debutPartie}</div>
+                )}
               </div>
             )}
             <div
@@ -320,7 +422,7 @@ function VuePlanche({ planche, pagination, sections, etiquettes, mots, glisse, a
         // La ligne d'insertion : au bord gauche du premier morceau de la
         // section visée, ou au bord droit de son dernier.
         const insertion =
-          repere?.id === section.id
+          repere?.type === 'postit' && repere.id === section.id
             ? repere.cote === 'avant'
               ? segment.suite
                 ? undefined
@@ -329,8 +431,10 @@ function VuePlanche({ planche, pagination, sections, etiquettes, mots, glisse, a
                 ? undefined
                 : 'apres'
             : undefined
-        // Le post-it glissé reste monté à sa place, estompé : le navigateur
+        // Ce qui est glissé reste monté à sa place, estompé : le navigateur
         // continue de lui adresser le doigt, et dnd-kit y cale la silhouette.
+        const source =
+          auPointeur && (glisse.type === 'section' ? glisse.id === section.id : glisse.id === section.partie)
         return (
           <PostIt
             key={`${segment.id}@${segment.premiere}`}
@@ -341,7 +445,7 @@ function VuePlanche({ planche, pagination, sections, etiquettes, mots, glisse, a
             mots={mots.get(section.id) ?? null}
             colonne={colonne}
             place={glisse?.mode === 'clavier' && glisse.id === section.id}
-            source={auPointeur && glisse.id === section.id}
+            source={source}
             insertion={insertion}
             actions={actions}
           />
@@ -351,7 +455,55 @@ function VuePlanche({ planche, pagination, sections, etiquettes, mots, glisse, a
   )
 }
 
-/** Page (et fraction de sa largeur) sous le pointeur, ou zone de fin de grille. */
+const sansGlisser = { [ATTRIBUT_SANS_GLISSER]: '' }
+
+/**
+ * Bandeau d'une partie, au-dessus de la page où elle commence (ou en fin
+ * de grille pour une partie vide). Le toucher ouvre ses réglages ; le
+ * glisser déplace la partie entière, avec ses sections.
+ */
+function BandeauPartie({ partie, vide, contexte }: { partie: Partie; vide: boolean; contexte: ContexteGrille }) {
+  const { etiquettes, glisse, actionsBandeau, regroupe } = contexte
+  const { listeners, setNodeRef } = useDraggable({ id: `${PREFIXE_PARTIE}${partie.id}`, disabled: !regroupe })
+  const etiquette = etiquettes.get(partie.id) ?? partie.titre
+  const auPointeur = glisse?.mode === 'pointeur'
+  const cible = auPointeur && glisse.repere?.type === 'partie' && glisse.repere.id === partie.id
+  const source = auPointeur && glisse.type === 'partie' && glisse.id === partie.id
+  const classes = ['separateur', vide ? 'separateur-vide' : '', cible ? 'separateur-cible' : '', source ? 'separateur-source' : '']
+  return (
+    <div ref={setNodeRef} className={classes.join(' ')} data-partie-cible={partie.id} {...listeners}>
+      <button
+        type="button"
+        className="separateur-titre"
+        aria-label={`Partie ${etiquette}${vide ? ', vide' : ''}`}
+        title="Toucher pour modifier, glisser pour déplacer la partie"
+        aria-haspopup="dialog"
+        onClick={() => {
+          actionsBandeau.ouvrir(partie.id)
+        }}
+      >
+        {etiquette}
+        {vide && <span className="mention-vide"> · vide</span>}
+      </button>
+      {vide && (
+        <button
+          type="button"
+          className="separateur-ajout bouton-icone"
+          aria-label={`Nouvelle section dans ${partie.titre}`}
+          title="Nouvelle section dans cette partie"
+          {...sansGlisser}
+          onClick={() => {
+            actionsBandeau.creerDans(partie.id)
+          }}
+        >
+          <IconePlus />
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Page (et fraction de sa largeur) sous le pointeur, bandeau de partie, ou zone de fin de grille. */
 function positionSousPointeur(x: number, y: number): PositionPointeur | null {
   // La silhouette elle-même ne compte pas ; la barre fixe du haut masque la
   // grille : au-dessus d'elle, on ne vise rien.
@@ -360,6 +512,8 @@ function positionSousPointeur(x: number, y: number): PositionPointeur | null {
   for (const element of pile) {
     if (!(element instanceof HTMLElement)) continue
     if (element.dataset.zone === 'fin') return { type: 'fin' }
+    const partie = element.closest<HTMLElement>('[data-partie-cible]')?.dataset.partieCible
+    if (partie !== undefined) return { type: 'partie', partie }
     const page = element.dataset.page
     if (page !== undefined) {
       const r = element.getBoundingClientRect()
@@ -368,6 +522,15 @@ function positionSousPointeur(x: number, y: number): PositionPointeur | null {
     }
   }
   return null
+}
+
+function titreDe(parties: ReadonlyMap<string, Partie>, id: string): string {
+  return parties.get(id)?.titre ?? id
+}
+
+function memeRepere(a: Repere | null, b: Repere | null): boolean {
+  if (a === null || b === null) return a === b
+  return a.type === b.type && a.id === b.id && (a.type !== 'postit' || b.type !== 'postit' || a.cote === b.cote)
 }
 
 function pagesEnToutesLettres(e: { premiere: number; derniere: number }): string {

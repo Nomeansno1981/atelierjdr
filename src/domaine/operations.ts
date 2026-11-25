@@ -7,6 +7,7 @@
 
 import { modelePourTitre } from './compilation'
 import { baseDuChemin, cheminLibre, slug } from './nomFichier'
+import { enGardantLesParties, nouvelIdPartie } from './parties'
 import { REGLES_PAR_DEFAUT, type ReglesTypo } from './typographie/regles'
 import {
   TITRE_PAGE_BLANCHE,
@@ -72,19 +73,27 @@ export function partieEntre(propre: string, avant: { partie: string } | undefine
   return avant?.partie ?? apres?.partie ?? propre
 }
 
-/** Déplace une section ; elle prend au besoin la partie de ses nouvelles voisines. */
-export function deplacer(plan: Plan, id: string, index: number): Plan {
+/**
+ * Déplace une section à `index` (compté sans elle). La partie d'arrivée est
+ * celle qu'on indique (à la souris, elle se lit sur la ligne d'insertion) ;
+ * sinon, celle de ses nouvelles voisines.
+ */
+export function deplacer(plan: Plan, id: string, index: number, partieVoulue?: string): Plan {
   const actuel = plan.sections.findIndex((s) => s.id === id)
-  if (actuel === -1 || actuel === index) return plan
-  const ordre = ordreAvecDeplacement(plan.sections, id, index)
-  const i = ordre.findIndex((s) => s.id === id)
-  const section = ordre[i]
-  if (!section) return plan
-  const partie = partieEntre(section.partie, ordre[i - 1], ordre[i + 1])
-  return {
-    ...plan,
-    sections: partie === section.partie ? ordre : ordre.map((s) => (s.id === id ? { ...s, partie } : s)),
-  }
+  const avant = plan.sections[actuel]
+  if (!avant || (actuel === index && (partieVoulue === undefined || partieVoulue === avant.partie))) return plan
+  return enGardantLesParties(plan, (p) => {
+    const ordre = ordreAvecDeplacement(p.sections, id, index)
+    const i = ordre.findIndex((s) => s.id === id)
+    const section = ordre[i]
+    if (!section) return p
+    const connue = partieVoulue !== undefined && p.parties.some((x) => x.id === partieVoulue)
+    const partie = connue ? partieVoulue : partieEntre(section.partie, ordre[i - 1], ordre[i + 1])
+    return {
+      ...p,
+      sections: partie === section.partie ? ordre : ordre.map((s) => (s.id === id ? { ...s, partie } : s)),
+    }
+  })
 }
 
 export function changerPages(plan: Plan, id: string, delta: number): Plan {
@@ -104,8 +113,16 @@ export interface ModificationSection {
   motsParPage: number | null
 }
 
-/** Modifie une section. Si le titre change, le fichier est renommé. */
+/**
+ * Modifie une section. Si le titre change, le fichier est renommé ; si la
+ * partie change, la section rejoint le bout le plus proche de sa nouvelle
+ * partie.
+ */
 export function modifierSection(plan: Plan, id: string, modif: Partial<ModificationSection>): Plan {
+  return enGardantLesParties(plan, (p) => modifierSectionSeule(p, id, modif))
+}
+
+function modifierSectionSeule(plan: Plan, id: string, modif: Partial<ModificationSection>): Plan {
   const s = trouver(plan, id)
   const { motsParPage, ...communs } = modif
   if (communs.titre !== undefined) communs.titre = communs.titre.trim()
@@ -132,8 +149,12 @@ export interface NouvelleSection {
   pages: number
 }
 
-/** Crée une section à `index` dans l'ordre du plan. */
+/** Crée une section à `index` dans l'ordre du plan (rangée dans sa partie si le plan est regroupé). */
 export function creerSection(plan: Plan, nouvelle: NouvelleSection, index: number, id: string): Plan {
+  return enGardantLesParties(plan, (p) => creerSectionSeule(p, nouvelle, index, id))
+}
+
+function creerSectionSeule(plan: Plan, nouvelle: NouvelleSection, index: number, id: string): Plan {
   const titre = nouvelle.titre.trim() || (nouvelle.type === 'blanche' ? TITRE_PAGE_BLANCHE : 'Sans titre')
   const commun = {
     id,
@@ -176,9 +197,14 @@ export function supprimerSection(plan: Plan, id: string, maintenant: Date): Plan
 
 /**
  * Remet une section de la corbeille à sa position d'origine, ou en fin de
- * grille si cette position n'existe plus.
+ * grille si cette position n'existe plus ; dans un plan regroupé, au bout
+ * le plus proche de sa partie.
  */
 export function restaurerSection(plan: Plan, id: string): Plan {
+  return enGardantLesParties(plan, (p) => restaurerSectionSeule(p, id))
+}
+
+function restaurerSectionSeule(plan: Plan, id: string): Plan {
   const element = plan.corbeille.find((e) => e.section.id === id)
   if (!element) return plan
   const sansElle: Plan = { ...plan, corbeille: plan.corbeille.filter((e) => e.section.id !== id) }
@@ -202,7 +228,8 @@ export interface Reglages {
   titre: string
   pagesTotal: number
   motsParPage: number
-  parties: Partie[]
+  /** Absent : les parties ne changent pas (elles se gèrent dans la grille). */
+  parties?: Partie[]
   typographie?: ReglesTypo
   modeleCompilation?: string
 }
@@ -213,8 +240,9 @@ export interface Reglages {
  */
 export function modifierReglages(plan: Plan, reglages: Reglages): Plan {
   const utilisees = new Set(plan.sections.map((s) => s.partie))
-  const gardees = new Set(reglages.parties.map((p) => p.id))
-  const parties = [...reglages.parties, ...plan.parties.filter((p) => utilisees.has(p.id) && !gardees.has(p.id))]
+  const voulues = reglages.parties ?? plan.parties
+  const gardees = new Set(voulues.map((p) => p.id))
+  const parties = [...voulues, ...plan.parties.filter((p) => utilisees.has(p.id) && !gardees.has(p.id))]
   const livre: Livre = {
     ...plan.livre,
     titre: reglages.titre.trim() || plan.livre.titre,
@@ -228,14 +256,7 @@ export function modifierReglages(plan: Plan, reglages: Reglages): Plan {
   return { ...plan, livre, parties, ...(reglagesLivre ? { reglages: reglagesLivre } : {}) }
 }
 
-/** Identifiant d'une nouvelle partie, tiré de son titre. */
-export function nouvelIdPartie(titre: string, parties: readonly Partie[]): string {
-  const base = slug(titre) === 'section' ? 'partie' : slug(titre)
-  const pris = new Set(parties.map((p) => p.id))
-  let id = base
-  for (let n = 2; pris.has(id); n++) id = `${base}-${n}`
-  return id
-}
+export { nouvelIdPartie }
 
 /** Ce que l'on demande pour commencer un livre ; le reste se règle ensuite. */
 export interface NouveauLivre {
