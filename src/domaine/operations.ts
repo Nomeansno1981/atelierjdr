@@ -6,6 +6,7 @@
  */
 
 import { baseDuChemin, cheminLibre, slug } from './nomFichier'
+import type { ReglesTypo } from './typographie/regles'
 import {
   toutesLesSections,
   type Debut,
@@ -178,6 +179,7 @@ export interface Reglages {
   pagesTotal: number
   motsParPage: number
   parties: Partie[]
+  typographie?: ReglesTypo
 }
 
 /**
@@ -194,7 +196,8 @@ export function modifierReglages(plan: Plan, reglages: Reglages): Plan {
     pagesTotal: Math.max(1, Math.round(reglages.pagesTotal)),
     motsParPage: Math.max(1, Math.round(reglages.motsParPage)),
   }
-  return { ...plan, livre, parties }
+  const reglagesLivre = reglages.typographie ? { ...plan.reglages, typographie: reglages.typographie } : plan.reglages
+  return { ...plan, livre, parties, ...(reglagesLivre ? { reglages: reglagesLivre } : {}) }
 }
 
 /** Identifiant d'une nouvelle partie, tiré de son titre. */

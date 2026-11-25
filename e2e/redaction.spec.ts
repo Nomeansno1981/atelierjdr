@@ -96,7 +96,8 @@ test('liste des sections : colonne sur ordinateur, tiroir sur téléphone', asyn
 test('recherche dans tout le manuscrit, puis ouverture à l’endroit trouvé', async ({ page }) => {
   await ouvrir(page)
   await ouvrirSection(page, 'Avant-propos')
-  await page.getByRole('button', { name: 'Chercher' }).click()
+  await page.getByText('Outils').click()
+  await page.getByRole('button', { name: /Chercher dans le manuscrit/ }).click()
   const dialogue = page.getByRole('dialog', { name: 'Chercher dans le manuscrit' })
   await dialogue.getByPlaceholder('Texte à chercher').fill('SERMENT')
   await expect(dialogue.locator('h3')).toHaveText(['Qu’est-ce que Katastrophê ?', 'Le heurt', 'Les serments', 'Lexique'])
@@ -163,7 +164,8 @@ test('conflit : rien n’est écrasé, la version locale est sauvegardée, on ch
 test('mode concentration : ne reste que le texte', async ({ page }) => {
   await ouvrir(page)
   await ouvrirSection(page, 'Le heurt')
-  await page.getByRole('button', { name: 'Concentration' }).click()
+  await page.getByText('Outils').click()
+  await page.getByRole('button', { name: 'Mode concentration' }).click()
   await expect(page.locator('.barre-redaction')).toBeHidden()
   await expect(page.getByLabel('Titre de la section')).toBeHidden()
   await expect(editeur(page)).toBeVisible()

@@ -4,6 +4,8 @@
  * mal formé avec des messages en français plutôt que de deviner.
  */
 
+import { REGLES_PAR_DEFAUT, type ReglesTypo } from './typographie/regles'
+
 export const STATUTS = ['a-ecrire', 'premier-jet', 'relu', 'definitif'] as const
 export type Statut = (typeof STATUTS)[number]
 
@@ -63,12 +65,23 @@ export interface ElementCorbeille {
   position: number
 }
 
+/** Réglages partagés entre appareils. Facultatifs : absents, les valeurs par défaut s'appliquent. */
+export interface ReglagesLivre {
+  typographie: ReglesTypo
+}
+
 export interface Plan {
   version: 1
   livre: Livre
+  reglages?: ReglagesLivre
   parties: Partie[]
   sections: Section[]
   corbeille: ElementCorbeille[]
+}
+
+/** Règles typographiques du livre. */
+export function reglesTypo(plan: Plan): ReglesTypo {
+  return plan.reglages?.typographie ?? REGLES_PAR_DEFAUT
 }
 
 export const MOTIF_ID = /^[a-z0-9]{6}$/
@@ -106,6 +119,7 @@ export function validerPlan(donnees: unknown): Plan {
   }
 
   const livre = lireLivre(v, racine.livre)
+  const reglages = racine.reglages === undefined ? undefined : lireReglages(v, racine.reglages)
   const parties = lireParties(v, racine.parties)
   const idsParties = new Set(parties.map((p) => p.id))
 
@@ -142,7 +156,21 @@ export function validerPlan(donnees: unknown): Plan {
   verifierUnicite(v, [...sections, ...corbeille.map((e) => e.section)])
 
   if (v.problemes.length > 0 || !livre) throw new ErreurPlan(v.problemes)
-  return { version: 1, livre, parties, sections, corbeille }
+  return { version: 1, livre, ...(reglages ? { reglages } : {}), parties, sections, corbeille }
+}
+
+function lireReglages(v: Verificateur, brut: unknown): ReglagesLivre | undefined {
+  const o = v.objet(brut, 'reglages')
+  if (!o) return undefined
+  const typo = o.typographie === undefined ? {} : v.objet(o.typographie, 'reglages.typographie')
+  if (!typo) return undefined
+  const typographie: ReglesTypo = { ...REGLES_PAR_DEFAUT }
+  for (const cle of Object.keys(REGLES_PAR_DEFAUT) as (keyof ReglesTypo)[]) {
+    if (typo[cle] === undefined) continue
+    const valeur = v.booleen(typo[cle], `reglages.typographie.${cle}`)
+    if (valeur !== null) typographie[cle] = valeur
+  }
+  return { typographie }
 }
 
 function nomSection(i: number, s: { titre: string }): string {
@@ -312,6 +340,19 @@ export function serialiserPlan(plan: Plan): string {
       motsParPage: plan.livre.motsParPage,
       premierePage: plan.livre.premierePage,
     },
+    ...(plan.reglages
+      ? {
+          reglages: {
+            typographie: {
+              apostrophe: plan.reglages.typographie.apostrophe,
+              guillemets: plan.reglages.typographie.guillemets,
+              ponctuation: plan.reglages.typographie.ponctuation,
+              suspension: plan.reglages.typographie.suspension,
+              espaceFine: plan.reglages.typographie.espaceFine,
+            },
+          },
+        }
+      : {}),
     parties: plan.parties.map((p) => ({ id: p.id, titre: p.titre, numerotee: p.numerotee })),
     sections: plan.sections.map(ordonnerSection),
     corbeille: plan.corbeille.map((e) => ({

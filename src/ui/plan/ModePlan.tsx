@@ -10,7 +10,9 @@ import {
   supprimerSection,
 } from '../../domaine/operations'
 import { paginer, type Pagination } from '../../domaine/pagination'
-import { LIBELLES_STATUT, STATUTS, type Plan } from '../../domaine/plan'
+import { LIBELLES_STATUT, reglesTypo, STATUTS, type Plan } from '../../domaine/plan'
+import { normaliser } from '../../domaine/typographie/normaliser'
+import type { ReglesTypo } from '../../domaine/typographie/regles'
 import type { Atelier, EtatOuvert } from '../../etat/atelier'
 import { RechercheGlobale } from '../redaction/RechercheGlobale'
 import type { Route } from '../routes'
@@ -104,6 +106,32 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
   }, [atelier])
 
   const titre = (id: string) => plan.sections.find((s) => s.id === id)?.titre ?? ''
+  /** Titres et résumés suivent la convention typographique, une fois validés. */
+  const typo = (texte: string) => normaliser(texte, reglesTypo(plan)).texte
+
+  /** Annonce le nombre de remplacements dans tout le manuscrit, puis les applique. */
+  function normaliserTout(regles: ReglesTypo) {
+    const changements: [string, string][] = []
+    let total = 0
+    for (const s of plan.sections) {
+      if (s.type !== 'texte') continue
+      const r = normaliser(textes?.get(s.id) ?? '', regles)
+      if (r.remplacements > 0) {
+        changements.push([s.id, r.texte])
+        total += r.remplacements
+      }
+    }
+    if (total === 0) {
+      window.alert('Rien à normaliser : tout le manuscrit suit déjà la convention typographique.')
+      return
+    }
+    const ok = window.confirm(
+      `${total} remplacement${total > 1 ? 's' : ''} typographique${total > 1 ? 's' : ''} dans ${changements.length} section${changements.length > 1 ? 's' : ''}. Les appliquer ? Les versions actuelles resteront dans l’historique GitHub.`,
+    )
+    if (!ok) return
+    for (const [id, texte] of changements) atelier.modifierTexte(id, texte)
+    void atelier.envoyerMaintenant()
+  }
 
   function choisirZoom(z: Zoom) {
     setZoom(z)
@@ -297,7 +325,12 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
           emplacement={pagination.emplacements.get(sectionOuverte.id)}
           mots={mots.get(sectionOuverte.id)}
           valider={(modif) => {
-            atelier.modifierPlan((p) => modifierSection(p, sectionOuverte.id, modif), `modification de ${sectionOuverte.titre}`)
+            const propre = {
+              ...modif,
+              ...(modif.titre !== undefined ? { titre: typo(modif.titre) } : {}),
+              ...(modif.resume !== undefined ? { resume: typo(modif.resume) } : {}),
+            }
+            atelier.modifierPlan((p) => modifierSection(p, sectionOuverte.id, propre), `modification de ${sectionOuverte.titre}`)
             setPanneau(null)
           }}
           supprimer={() => {
@@ -318,9 +351,10 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
           plan={plan}
           index={panneau.index}
           creer={(nouvelle) => {
+            const propre = { ...nouvelle, titre: typo(nouvelle.titre) }
             atelier.modifierPlan(
-              (p) => creerSection(p, nouvelle, panneau.index, nouvelId(p)),
-              `création de ${nouvelle.titre.trim()}`,
+              (p) => creerSection(p, propre, panneau.index, nouvelId(p)),
+              `création de ${propre.titre.trim()}`,
             )
             setPanneau(null)
           }}
@@ -365,6 +399,7 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
             atelier.modifierPlan((p) => modifierReglages(p, reglages), 'réglages du livre')
             setPanneau(null)
           }}
+          normaliserTout={normaliserTout}
           seDeconnecter={() => {
             setPanneau(null)
             void atelier.seDeconnecter()

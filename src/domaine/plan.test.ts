@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { lireExemple } from '../test/exemple'
-import { ErreurPlan, lirePlan, validerPlan } from './plan'
+import { ErreurPlan, lirePlan, serialiserPlan, validerPlan } from './plan'
 
 function planMinimal(): Record<string, unknown> {
   return {
@@ -149,5 +149,38 @@ describe('lirePlan', () => {
     const liste = problemes(plan)
     expect(liste.some((p) => p.includes('corbeille/'))).toBe(true)
     expect(liste.some((p) => p.includes('date invalide'))).toBe(true)
+  })
+})
+
+describe('réglages du livre', () => {
+  it('sont facultatifs et prennent les valeurs par défaut', () => {
+    const plan = validerPlan({ ...planMinimal(), reglages: { typographie: { espaceFine: true } } })
+    expect(plan.reglages?.typographie).toEqual({
+      apostrophe: true,
+      guillemets: true,
+      ponctuation: true,
+      suspension: true,
+      espaceFine: true,
+    })
+  })
+
+  it('sont réécrits tels quels, juste après le livre', () => {
+    const plan = validerPlan({ ...planMinimal(), reglages: { typographie: { suspension: false } } })
+    const relu = lirePlan(serialiserPlan(plan))
+    expect(relu.reglages?.typographie.suspension).toBe(false)
+    expect(Object.keys(JSON.parse(serialiserPlan(plan)) as object)).toEqual([
+      'version',
+      'livre',
+      'reglages',
+      'parties',
+      'sections',
+      'corbeille',
+    ])
+  })
+
+  it('refusent une valeur qui n’est pas vrai ou faux', () => {
+    expect(problemes({ ...planMinimal(), reglages: { typographie: { apostrophe: 'oui' } } })[0]).toContain(
+      'reglages.typographie.apostrophe',
+    )
   })
 })

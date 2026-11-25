@@ -328,3 +328,75 @@
 .barre-redaction button {
   white-space: nowrap;
 }
+
+/* --- Menu « Outils » --------------------------------------------------------- */
+
+.menu-outils {
+  position: relative;
+}
+
+.menu-outils > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--cible-tactile);
+  padding: 0 14px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+  cursor: pointer;
+  list-style: none;
+}
+
+.menu-outils > summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu-outils[open] > summary {
+  background: var(--fond);
+}
+
+.menu-contenu {
+  position: absolute;
+  z-index: 15;
+  right: 0;
+  top: calc(100% + 4px);
+  display: grid;
+  gap: 2px;
+  min-width: 260px;
+  padding: 6px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--surface);
+  box-shadow: var(--ombre-forte);
+}
+
+.menu-contenu > button,
+.menu-contenu > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--cible-tactile);
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.menu-contenu > label {
+  justify-content: flex-start;
+}
+
+.menu-contenu kbd {
+  color: var(--texte-doux);
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+/* --- Espaces insécables rendues visibles ------------------------------------- */
+
+.editeur .cm-insecable {
+  border-radius: 2px;
+  background: var(--hachure);
+  box-shadow: 0 0 0 1px var(--hachure);
+}

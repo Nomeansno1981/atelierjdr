@@ -2,7 +2,7 @@
 
 Outil personnel pour planifier et rédiger le manuel de *Katastrophê* : un chemin de fer (le plan du livre, page par page) et un éditeur Markdown. Le site est statique, hébergé sur GitHub Pages ; le manuscrit vit dans un dépôt GitHub privé, en fichiers Markdown lisibles sans l’Atelier.
 
-> **État : jalon 3 (mode rédaction).** Le plan (chemin de fer) et l’éditeur Markdown sont en place. Tout est enregistré sur l’appareil, puis envoyé à GitHub. La typographie automatique arrive au jalon 4.
+> **État : jalon 4 (typographie).** Le plan (chemin de fer), l’éditeur Markdown et la typographie française automatique sont en place. Tout est enregistré sur l’appareil, puis envoyé à GitHub. La lecture continue et la compilation arrivent au jalon 5.
 
 ## Les deux dépôts
 
@@ -94,6 +94,27 @@ L’éditeur montre le Markdown brut, avec un léger rendu : intertitres plus gr
 - **Enregistrement** : le texte est écrit sur l’appareil moins d’une seconde après la frappe, puis envoyé à GitHub après 30 secondes sans frappe, en quittant la section, en revenant au plan, sur Cmd/Ctrl+S, ou quand l’onglet passe en arrière-plan. Un réseau coupé ou un onglet fermé ne fait rien perdre : tout part au retour du réseau.
 - **Conflit** : si la même section a été modifiée sur un autre appareil, rien n’est écrasé. La version de cet appareil est sauvegardée dans `conflits/` du dépôt, celle de GitHub reste en place, et un bandeau vous laisse choisir laquelle garder.
 - **Historique** : un lien sous le texte ouvre l’historique de la section sur GitHub.
+- **Outils** (menu sous le titre) : recherche dans le manuscrit, normalisation de la typographie, affichage des espaces insécables, mode concentration.
+
+## Typographie française
+
+Pendant la frappe, l’éditeur applique la convention du projet :
+
+| Vous tapez | Vous obtenez |
+| --- | --- |
+| `l'acte` | `l’acte` (apostrophe typographique) |
+| `"Oui"` | `« Oui »`, avec des espaces insécables à l’intérieur |
+| `Non !` ou `Non!` | `Non !`, avec une espace insécable avant `: ; ! ?` |
+| `Attends...` | `Attends…` |
+
+- Un **Cmd/Ctrl+Z** juste après annule la seule substitution et rend le caractère tapé.
+- **Rien n’est touché** dans le code, les adresses de liens et d’images, les URL, les heures et les rapports (`14:30`, `3:2`), ni le `!` d’une image. Aucun tiret n’est jamais converti.
+- **Réglages** : chaque règle s’active ou se désactive à part, et l’espace fine insécable (U+202F) peut remplacer l’insécable ordinaire devant `; ! ?`. Ces réglages sont enregistrés dans `plan.json` : ils valent sur tous vos appareils.
+- **Montrer les espaces insécables** (menu Outils, ou Réglages) les affiche sur un léger fond gris. Ce réglage est propre à chaque appareil.
+- **Normaliser** applique les mêmes règles à un texte déjà écrit : une section depuis le menu Outils, ou tout le manuscrit depuis les Réglages. Le nombre de remplacements est annoncé avant d’appliquer. Normaliser deux fois ne change rien de plus.
+- Les **titres et résumés** suivent la même convention quand vous les validez.
+
+**Sur iPhone et iPad**, désactivez la « Ponctuation intelligente » d’iOS (Réglages › Général › Clavier) : elle transforme `--` en tiret cadratin, ce que la convention du projet exclut. Les guillemets anglais qu’elle pose sont, eux, convertis en guillemets français par l’Atelier.
 
 ## Installer sur iPhone et iPad
 

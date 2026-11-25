@@ -1,21 +1,35 @@
 import { useId, useState, type SubmitEvent } from 'react'
 import { nouvelIdPartie, type Reglages } from '../../domaine/operations'
-import type { Partie, Plan } from '../../domaine/plan'
+import { reglesTypo, type Partie, type Plan } from '../../domaine/plan'
+import type { ReglesTypo } from '../../domaine/typographie/regles'
 import { Dialogue } from '../commun/Dialogue'
+import { afficherInsecables, useInsecablesVisibles } from '../preferences'
+
+const REGLES: { cle: keyof ReglesTypo; libelle: string }[] = [
+  { cle: 'apostrophe', libelle: 'Apostrophe typographique (’)' },
+  { cle: 'guillemets', libelle: 'Guillemets français avec espaces insécables («\u00a0»)' },
+  { cle: 'ponctuation', libelle: 'Espace insécable avant : ; ! ?' },
+  { cle: 'suspension', libelle: 'Points de suspension (…)' },
+  { cle: 'espaceFine', libelle: 'Espace fine insécable (U+202F) devant ; ! ? plutôt que l’insécable ordinaire' },
+]
 
 interface Proprietes {
   plan: Plan
   enAttente: number
   valider: (reglages: Reglages) => void
+  /** Normaliser tout le manuscrit, avec les règles du formulaire. */
+  normaliserTout: (regles: ReglesTypo) => void
   seDeconnecter: () => void
   fermer: () => void
 }
 
-export function PanneauReglages({ plan, enAttente, valider, seDeconnecter, fermer }: Proprietes) {
+export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDeconnecter, fermer }: Proprietes) {
   const [titre, setTitre] = useState(plan.livre.titre)
   const [pagesTotal, setPagesTotal] = useState(String(plan.livre.pagesTotal))
   const [motsParPage, setMotsParPage] = useState(String(plan.livre.motsParPage))
   const [parties, setParties] = useState<Partie[]>(plan.parties)
+  const [typographie, setTypographie] = useState<ReglesTypo>(reglesTypo(plan))
+  const insecablesVisibles = useInsecablesVisibles()
   const id = useId()
   const utilisees = new Set(plan.sections.map((s) => s.partie))
 
@@ -43,6 +57,7 @@ export function PanneauReglages({ plan, enAttente, valider, seDeconnecter, ferme
       pagesTotal: Number.parseInt(pagesTotal, 10) || plan.livre.pagesTotal,
       motsParPage: Number.parseInt(motsParPage, 10) || plan.livre.motsParPage,
       parties: parties.map((p) => ({ ...p, titre: p.titre.trim() || 'Sans titre' })),
+      typographie,
     })
   }
 
@@ -155,6 +170,44 @@ export function PanneauReglages({ plan, enAttente, valider, seDeconnecter, ferme
           >
             Ajouter une partie
           </button>
+        </fieldset>
+
+        <fieldset className="parties">
+          <legend>Typographie pendant la frappe</legend>
+          {REGLES.map((r) => (
+            <label key={r.cle} className="case">
+              <input
+                type="checkbox"
+                checked={typographie[r.cle]}
+                onChange={(e) => {
+                  setTypographie((t) => ({ ...t, [r.cle]: e.target.checked }))
+                }}
+              />
+              {r.libelle}
+            </label>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              normaliserTout(typographie)
+            }}
+          >
+            Normaliser tout le manuscrit…
+          </button>
+        </fieldset>
+
+        <fieldset className="parties">
+          <legend>Sur cet appareil</legend>
+          <label className="case">
+            <input
+              type="checkbox"
+              checked={insecablesVisibles}
+              onChange={(e) => {
+                afficherInsecables(e.target.checked)
+              }}
+            />
+            Montrer les espaces insécables dans l’éditeur
+          </label>
         </fieldset>
 
         <div className="actions-formulaire">

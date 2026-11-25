@@ -439,7 +439,13 @@ export class Atelier {
       })
     }
     this.ecrituresEnAttente.add(id)
-    if (!this.minuteries.has('ecriture')) {
+    // Première modification depuis la dernière synchronisation : écrite tout
+    // de suite, pour que l'indicateur ne dise jamais « Synchronisé » à tort.
+    // Les frappes suivantes sont regroupées.
+    const indicateurAJour = this.etat.phase === 'atelier' && this.etat.synchro.etat === 'a-jour'
+    if (indicateurAJour) {
+      this.programmer('ecriture', 0, () => void this.ecrireTextes())
+    } else if (!this.minuteries.has('ecriture')) {
       this.programmer('ecriture', DELAI_ECRITURE_LOCALE_MS, () => void this.ecrireTextes())
     }
     this.programmer('texte', this.options.delaiEnvoiTexteMs ?? DELAI_ENVOI_TEXTE_MS)

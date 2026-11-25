@@ -1,15 +1,17 @@
-import { memo, useDeferredValue, useEffect, useMemo, useState, type KeyboardEvent as EvenementClavier } from 'react'
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent as EvenementClavier } from 'react'
 import { depasseLaCible, cibleMots } from '../../domaine/mots'
 import { changerPages, modifierSection } from '../../domaine/operations'
-import { LIBELLES_STATUT, STATUTS, type Plan, type SectionTexte, type Statut } from '../../domaine/plan'
+import { LIBELLES_STATUT, reglesTypo, STATUTS, type Plan, type SectionTexte, type Statut } from '../../domaine/plan'
 import { titresReserves } from '../../domaine/titres'
+import { normaliser } from '../../domaine/typographie/normaliser'
 import type { Atelier, EtatOuvert } from '../../etat/atelier'
 import { Dialogue } from '../commun/Dialogue'
 import { IconeHorsTexte, IconeMoins, IconePlus } from '../commun/icones'
 import { IndicateurSynchro } from '../commun/IndicateurSynchro'
 import { formaterNombre, motsDe, motsParSection, type MotsSection } from '../plan/format'
+import { afficherInsecables, useInsecablesVisibles } from '../preferences'
 import type { Route, Selection } from '../routes'
-import { Editeur } from './Editeur'
+import { Editeur, type PoigneeEditeur } from './Editeur'
 import { RechercheGlobale } from './RechercheGlobale'
 
 interface Proprietes {
@@ -28,6 +30,10 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
   const [tiroir, setTiroir] = useState(false)
   const [recherche, setRecherche] = useState(false)
   const [concentration, setConcentration] = useState(false)
+  const insecablesVisibles = useInsecablesVisibles()
+  const regles = reglesTypo(plan)
+  const poignee = useRef<PoigneeEditeur>(null)
+  const menu = useRef<HTMLDetailsElement>(null)
   // Texte tapé, pour le compteur en direct (le contrôleur publie avec un léger différé).
   const [frappe, setFrappe] = useState<{ id: string; texte: string } | null>(null)
 
@@ -82,6 +88,25 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
       observateur.disconnect()
     }
   }, [concentration])
+
+  function fermerMenu() {
+    if (menu.current) menu.current.open = false
+  }
+
+  /** Annonce le nombre de remplacements, puis les applique sur confirmation. */
+  function normaliserSection() {
+    fermerMenu()
+    const texte = poignee.current?.texte() ?? ''
+    const { remplacements } = normaliser(texte, regles)
+    if (remplacements === 0) {
+      window.alert('Rien à normaliser : ce texte suit déjà la convention typographique.')
+      return
+    }
+    const ok = window.confirm(
+      `${remplacements} remplacement${remplacements > 1 ? 's' : ''} typographique${remplacements > 1 ? 's' : ''} dans cette section. Les appliquer ? (Cmd/Ctrl+Z les annule.)`,
+    )
+    if (ok) poignee.current?.normaliser()
+  }
 
   if (!section) {
     return (
@@ -140,7 +165,8 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
             key={section.id + section.titre}
             titre={section.titre}
             valider={(titre) => {
-              atelier.modifierPlan((p) => modifierSection(p, id, { titre }), `modification de ${section.titre}`)
+              const propre = normaliser(titre, regles).texte
+              atelier.modifierPlan((p) => modifierSection(p, id, { titre: propre }), `modification de ${section.titre}`)
             }}
           />
 
@@ -210,18 +236,42 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
             >
               ›
             </button>
-            <button type="button" onClick={() => { setRecherche(true) }} title="Cmd/Ctrl+Maj+F">
-              Chercher
-            </button>
-            <button
-              type="button"
-              aria-pressed={concentration}
-              onClick={() => {
-                setConcentration((c) => !c)
-              }}
-            >
-              Concentration
-            </button>
+            <details className="menu-outils" ref={menu}>
+              <summary>Outils</summary>
+              <div className="menu-contenu">
+                <button
+                  type="button"
+                  onClick={() => {
+                    fermerMenu()
+                    setRecherche(true)
+                  }}
+                >
+                  Chercher dans le manuscrit <kbd>⌘⇧F</kbd>
+                </button>
+                <button type="button" onClick={normaliserSection}>
+                  Normaliser la typographie
+                </button>
+                <label className="case">
+                  <input
+                    type="checkbox"
+                    checked={insecablesVisibles}
+                    onChange={(e) => {
+                      afficherInsecables(e.target.checked)
+                    }}
+                  />
+                  Montrer les espaces insécables
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    fermerMenu()
+                    setConcentration(true)
+                  }}
+                >
+                  Mode concentration
+                </button>
+              </div>
+            </details>
           </div>
         </header>
 
@@ -276,6 +326,9 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
             rechercheGlobale={() => {
               setRecherche(true)
             }}
+            regles={regles}
+            afficherInsecables={insecablesVisibles}
+            ref={poignee}
           />
           <p className="pied-texte">
             <a href={historique} target="_blank" rel="noopener noreferrer">

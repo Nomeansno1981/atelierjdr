@@ -1,8 +1,24 @@
 import { Annotation, EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, type Ref } from 'react'
+import type { ReglesTypo } from '../../domaine/typographie/regles'
 import type { Selection } from '../routes'
 import { extensionsAtelier } from './extensions'
+import {
+  compartimentInsecables,
+  compartimentRegles,
+  configurationInsecables,
+  configurationRegles,
+  extensionsTypographie,
+  normaliserEditeur,
+} from './typographie'
+
+/** Commandes que l'écran de rédaction peut adresser à l'éditeur. */
+export interface PoigneeEditeur {
+  /** Normalise la typographie de la section ; renvoie le nombre de remplacements. */
+  normaliser: () => number
+  texte: () => string
+}
 
 /** Marque les remplacements venus de GitHub : ce ne sont pas des frappes. */
 const venuDeGitHub = Annotation.define<boolean>()
@@ -19,6 +35,9 @@ interface Proprietes {
   changer: (id: string, contenu: string) => void
   envoyer: () => void
   rechercheGlobale: () => void
+  regles: ReglesTypo
+  afficherInsecables: boolean
+  ref?: Ref<PoigneeEditeur>
 }
 
 /**
@@ -26,7 +45,19 @@ interface Proprietes {
  * jamais pendant la frappe. Chaque section conserve son historique
  * d'annulation tant que la page reste ouverte.
  */
-export function Editeur({ id, texte, texteDistant, modifie, selection, changer, envoyer, rechercheGlobale }: Proprietes) {
+export function Editeur({
+  id,
+  texte,
+  texteDistant,
+  modifie,
+  selection,
+  changer,
+  envoyer,
+  rechercheGlobale,
+  regles,
+  afficherInsecables,
+  ref,
+}: Proprietes) {
   const hote = useRef<HTMLDivElement>(null)
   const vue = useRef<EditorView | null>(null)
   const etats = useRef(new Map<string, EditorState>())
@@ -34,9 +65,16 @@ export function Editeur({ id, texte, texteDistant, modifie, selection, changer, 
   const distantPrecedent = useRef(texteDistant)
 
   const rappels = useRef({ changer, envoyer, rechercheGlobale })
+  const configuration = useRef({ regles, afficherInsecables })
   useLayoutEffect(() => {
     rappels.current = { changer, envoyer, rechercheGlobale }
+    configuration.current = { regles, afficherInsecables }
   })
+
+  useImperativeHandle(ref, () => ({
+    normaliser: () => (vue.current ? normaliserEditeur(vue.current, configuration.current.regles) : 0),
+    texte: () => vue.current?.state.doc.toString() ?? '',
+  }))
 
   function creerEtat(contenu: string): EditorState {
     return EditorState.create({
@@ -51,6 +89,7 @@ export function Editeur({ id, texte, texteDistant, modifie, selection, changer, 
           },
           margeHaut: () => document.querySelector('.barre-redaction')?.getBoundingClientRect().bottom ?? 0,
         }),
+        extensionsTypographie(configuration.current.regles, configuration.current.afficherInsecables),
         EditorView.updateListener.of((maj) => {
           if (!maj.docChanged) return
           if (maj.transactions.some((tr) => tr.annotation(venuDeGitHub))) return
@@ -82,6 +121,13 @@ export function Editeur({ id, texte, texteDistant, modifie, selection, changer, 
     distantPrecedent.current = texteDistant
     const memorise = etats.current.get(id)
     v.setState(memorise?.doc.toString() === texte ? memorise : creerEtat(texte))
+    // Un état mémorisé peut dater d'anciens réglages.
+    v.dispatch({
+      effects: [
+        compartimentRegles.reconfigure(configurationRegles(configuration.current.regles)),
+        compartimentInsecables.reconfigure(configurationInsecables(configuration.current.afficherInsecables)),
+      ],
+    })
     // Seul le changement d'identifiant déclenche ce remplacement.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
@@ -104,6 +150,14 @@ export function Editeur({ id, texte, texteDistant, modifie, selection, changer, 
     // Réagit seulement à un nouveau texte distant.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [texteDistant])
+
+  // Réglages typographiques et affichage des insécables.
+  useEffect(() => {
+    vue.current?.dispatch({ effects: compartimentRegles.reconfigure(configurationRegles(regles)) })
+  }, [regles])
+  useEffect(() => {
+    vue.current?.dispatch({ effects: compartimentInsecables.reconfigure(configurationInsecables(afficherInsecables)) })
+  }, [afficherInsecables])
 
   // Ouverture à un endroit précis (résultat de recherche).
   useEffect(() => {

@@ -5,7 +5,7 @@
  * l'interface en français.
  */
 
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { defaultKeymap, history, historyKeymap, redo } from '@codemirror/commands'
 import { defineLanguageFacet, HighlightStyle, Language, syntaxHighlighting } from '@codemirror/language'
 import { search, searchKeymap } from '@codemirror/search'
 import { EditorSelection, EditorState, RangeSetBuilder, type Extension, type StateCommand } from '@codemirror/state'
@@ -148,6 +148,8 @@ export function extensionsAtelier(rappels: Rappels): Extension[] {
     search({ top: true }),
     titresReservesSignales,
     keymap.of([
+      // Cmd/Ctrl+Maj+Z rétablit sur tous les systèmes (CodeMirror ne le prévoit que sur Mac).
+      { key: 'Mod-Shift-z', run: redo, preventDefault: true },
       { key: 'Mod-b', run: basculerMarque('**') },
       { key: 'Mod-i', run: basculerMarque('*') },
       {
