@@ -94,10 +94,11 @@ test('le rendu est nettoyé : ni script, ni gestionnaire d’événement, ni lie
   await expect(section.locator('a[href^="javascript"]')).toHaveCount(0)
   await section.getByText('Paragraphe').click()
   expect(await page.evaluate(() => (window as unknown as { __piege?: number }).__piege)).toBeUndefined()
-  // Chromium signale les gestionnaires en ligne dès l'analyse du HTML piégé,
-  // même dans le document inerte où DOMPurify fait son tri : la politique de
-  // sécurité les bloque en seconde barrière. Rien d'autre ne doit apparaître.
-  expect(erreurs.filter((e) => !e.includes('inline event handler'))).toEqual([])
+  // Chromium signale les gestionnaires et styles en ligne dès l'analyse du HTML
+  // piégé, même dans le document inerte où DOMPurify fait son tri (selon sa
+  // version) : la politique de sécurité les bloque en seconde barrière. Le DOM
+  // affiché n'en contient aucun (vérifié plus haut). Rien d'autre ne doit apparaître.
+  expect(erreurs.filter((e) => !e.includes('inline event handler') && !e.includes('Applying inline style'))).toEqual([])
 })
 
 test('compiler et télécharger : le fichier attendu, au nom du modèle', async ({ page }) => {
