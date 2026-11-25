@@ -2,7 +2,7 @@
 
 Outil personnel pour planifier et rédiger le manuel de *Katastrophê* : un chemin de fer (le plan du livre, page par page) et un éditeur Markdown. Le site est statique, hébergé sur GitHub Pages ; le manuscrit vit dans un dépôt GitHub privé, en fichiers Markdown lisibles sans l’Atelier.
 
-> **État : jalon 5 (sorties).** Plan, éditeur, typographie, lecture continue, compilation (site et script Python identiques) et export .zip sont en place. Le jalon 6 portera sur la robustesse : conflits entre appareils, installation sur l’écran d’accueil, sécurité.
+> **État : version 1 (jalon 6, robustesse).** Plan, éditeur, typographie, lecture continue, compilation (site et script Python identiques), export .zip, fusion et conflits entre appareils, installation sur l’écran d’accueil.
 
 ## Les deux dépôts
 
@@ -79,7 +79,7 @@ Le plan est un chemin de fer : chaque section est un post-it qui couvre autant d
 - **Pages hachurées** : en gris, une page blanche insérée automatiquement ; en rouge, une page au-delà du nombre de pages prévu.
 - **Réglages** (icône à curseurs) : titre, nombre de pages, mots par page, parties. La déconnexion s’y trouve aussi.
 - **Enregistrement** : chaque modification est écrite sur l’appareil immédiatement, puis envoyée à GitHub environ 5 secondes après la dernière, en un seul commit. L’indicateur en haut à droite dit où elle en est.
-- **Conflit** : si le plan a été modifié sur un autre appareil pendant que vous travailliez, un bandeau vous laisse choisir la version à garder. L’autre reste dans l’historique GitHub.
+- **Plusieurs appareils** : si le plan a aussi été modifié sur un autre appareil, les deux versions sont fusionnées automatiquement, section par section et champ par champ. Si le même champ a changé des deux côtés (le statut d’une même section, par exemple), la modification la plus récente l’emporte, et un bandeau détaille ce qui a été remplacé. L’autre version reste dans l’historique GitHub.
 
 Toucher une section de texte ouvre l’éditeur ; toucher un hors-texte ouvre son panneau.
 
@@ -92,7 +92,10 @@ L’éditeur montre le Markdown brut, avec un léger rendu : intertitres plus gr
 - **Intertitres** : commencez à `###`. Les titres `#` et `##` sont réservés à la compilation ; l’éditeur les souligne en rouge.
 - **Raccourcis** : Cmd/Ctrl+B gras, Cmd/Ctrl+I italique, Cmd/Ctrl+S envoyer tout de suite, Cmd/Ctrl+F chercher dans la section, Cmd/Ctrl+Maj+F chercher dans tout le manuscrit (sans tenir compte des majuscules ni des accents).
 - **Enregistrement** : le texte est écrit sur l’appareil moins d’une seconde après la frappe, puis envoyé à GitHub après 30 secondes sans frappe, en quittant la section, en revenant au plan, sur Cmd/Ctrl+S, ou quand l’onglet passe en arrière-plan. Un réseau coupé ou un onglet fermé ne fait rien perdre : tout part au retour du réseau.
-- **Conflit** : si la même section a été modifiée sur un autre appareil, rien n’est écrasé. La version de cet appareil est sauvegardée dans `conflits/` du dépôt, celle de GitHub reste en place, et un bandeau vous laisse choisir laquelle garder.
+- **Conflit** : si la même section a été modifiée sur un autre appareil, rien n’est écrasé. La version de cet appareil est sauvegardée dans `conflits/` du dépôt, celle de GitHub reste en place, et un bandeau propose de **comparer les deux versions** :
+  - sur ordinateur et tablette, côte à côte : GitHub à gauche, cet appareil à droite (modifiable) ; la flèche entre les colonnes reprend un passage de GitHub ;
+  - sur téléphone, sur une seule colonne : à chaque différence, « Garder le mien » ou « Prendre GitHub » ;
+  - puis « Garder le texte fusionné » (après vos retouches), « Garder celle de l’appareil » ou « Garder celle de GitHub ». Une fois le conflit réglé avec votre version ou le texte fusionné, la sauvegarde de `conflits/` est retirée ; elle reste si vous prenez celle de GitHub.
 - **Historique** : un lien sous le texte ouvre l’historique de la section sur GitHub.
 - **Outils** (menu sous le titre) : recherche dans le manuscrit, normalisation de la typographie, affichage des espaces insécables, mode concentration.
 
@@ -162,14 +165,22 @@ Sans `--version`, il prend la version suivant la plus haute trouvée dans `compi
 ## Installer sur iPhone et iPad
 
 1. Ouvrez l’adresse du site dans **Safari**.
-2. Touchez le bouton **Partager**, puis **Sur l’écran d’accueil**, puis **Ajouter**.
+2. Touchez le bouton **Partager**, puis **Sur l’écran d’accueil**, puis **Ajouter**. L’Atelier y apparaît avec son icône et s’ouvre en plein écran, sans la barre de Safari.
 3. Ouvrez l’Atelier depuis l’icône et **saisissez le jeton dans l’application installée** : elle ne partage pas son stockage avec Safari.
 
-L’installation protège aussi le cache : Safari peut effacer les données d’un site non installé après sept jours sans visite. Le site lui-même a besoin du réseau pour s’ouvrir : il n’est pas prévu pour fonctionner en mode avion.
+L’installation protège aussi le cache : Safari peut effacer les données d’un site non installé après sept jours sans visite. Le site lui-même a besoin du réseau pour s’ouvrir : il n’est pas prévu pour fonctionner en mode avion (une coupure pendant le travail, elle, ne fait rien perdre).
+
+## Sécurité
+
+- **Le jeton** ne quitte jamais l’appareil : ni dans le code, ni dans un dépôt. Sa portée se limite au dépôt du manuscrit et à la permission *Contents*.
+- **Politique de sécurité du contenu** stricte : scripts du site seulement, connexions vers `api.github.com` seulement, aucun script tiers, aucun CDN, aucune mesure d’audience. Les styles de l’éditeur passent par un jeton tiré à chaque publication du site.
+- **Le rendu Markdown** de la lecture continue est toujours nettoyé par DOMPurify.
+- **Site public, contenu privé** : sans jeton, le site n’affiche que l’écran de connexion, et il demande aux moteurs de recherche de ne pas l’indexer.
+- **Ne publiez pas d’autre site GitHub Pages avec des scripts tiers sous le même compte** : tous les sites `VOTRE-NOM.github.io` partagent le même stockage du navigateur, donc le jeton. Pour isoler l’Atelier, donnez-lui son propre domaine (Settings › Pages › Custom domain).
 
 ## Développement
 
-Prérequis : Node.js 22.
+Prérequis : Node.js 22 et Python 3 (un test compare la compilation du site à celle de `outils/compiler.py`).
 
 ```bash
 npm install

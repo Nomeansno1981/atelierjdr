@@ -317,3 +317,27 @@ describe('envoyer : textes', () => {
     )
   })
 })
+
+describe('envoyer : fusion du plan', () => {
+  it('fusionne au lieu de signaler un conflit quand la base commune est connue', async () => {
+    const faux = await FauxGitHub.creer(exemple)
+    const depot: Depot = { proprietaire: faux.proprietaire, nom: faux.nom }
+    const client = creerClient(faux.jetonValide, faux.enFetch())
+    const shaPlanBase = await shaBlobGit(exemple['plan.json'] ?? '')
+    await faux.publier({ ...exemple, 'plan.json': serialiserPlan(deplacer(planExemple(), LEXIQUE, 0)) })
+
+    const r = await envoyer(client, depot, 'main', {
+      plan: modifierSection(planExemple(), LE_HEURT, { titre: 'Le choc' }),
+      shaPlanBase,
+      forcer: false,
+      fusion: { base: planExemple(), modifieLe: new Date().toISOString() },
+      message: () => 'Plan : fusion',
+    })
+    expect(r.type === 'envoye' && r.fusion).toEqual({ remplacements: [] })
+    const plan = lirePlan(faux.fichiers()['plan.json'] ?? '')
+    expect(plan.sections[0]?.id).toBe(LEXIQUE)
+    expect(plan.sections.find((s) => s.id === LE_HEURT)?.titre).toBe('Le choc')
+    // Le fichier suit le renommage, dans le même commit.
+    expect(faux.fichiers()['sections/le-choc.md']).toBe(exemple['sections/le-heurt.md'])
+  })
+})

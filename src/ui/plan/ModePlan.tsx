@@ -17,6 +17,7 @@ import type { Atelier, EtatOuvert } from '../../etat/atelier'
 import { RechercheGlobale } from '../redaction/RechercheGlobale'
 import type { Route } from '../routes'
 import { IconeAnnuler, IconeCorbeille, IconeReglages, IconeRetablir, IconeSynchro } from '../commun/icones'
+import { BandeauFusion } from '../commun/BandeauFusion'
 import { IndicateurSynchro } from '../commun/IndicateurSynchro'
 import { formaterNombre, motsParSection, type MotsSection } from './format'
 import { Grille } from './Grille'
@@ -298,6 +299,12 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
           {etat.synchro.message}
         </p>
       )}
+      <BandeauFusion
+        fusion={etat.fusion}
+        fermer={() => {
+          atelier.oublierFusion()
+        }}
+      />
 
       <main className="contenu-plan">
         <Grille

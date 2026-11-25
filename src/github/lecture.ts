@@ -15,6 +15,8 @@ export interface InstantaneDistant {
   commit: string
   /** SHA de l'arbre racine de ce commit. */
   arbre: string
+  /** Date du commit (ISO), pour départager une fusion ; null si GitHub ne la donne pas. */
+  date: string | null
   /** Chemin du fichier → SHA de son blob. */
   fichiers: Map<string, string>
 }
@@ -62,7 +64,10 @@ export async function lireArbreDuCommit(
     const entree = objet(brute)
     if (entree.type === 'blob') fichiers.set(chaine(entree, 'path'), chaine(entree, 'sha'))
   }
-  return { commit, arbre, fichiers }
+  const auteur = donneesCommit.committer
+  const date =
+    typeof auteur === 'object' && auteur !== null && 'date' in auteur && typeof auteur.date === 'string' ? auteur.date : null
+  return { commit, arbre, date, fichiers }
 }
 
 export async function lireBlob(client: ClientGitHub, depot: Depot, sha: string): Promise<string> {

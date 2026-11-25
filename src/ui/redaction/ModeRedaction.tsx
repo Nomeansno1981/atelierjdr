@@ -1,4 +1,14 @@
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent as EvenementClavier } from 'react'
+import {
+  lazy,
+  memo,
+  Suspense,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as EvenementClavier,
+} from 'react'
 import { depasseLaCible, cibleMots } from '../../domaine/mots'
 import { changerPages, modifierSection } from '../../domaine/operations'
 import { LIBELLES_STATUT, reglesTypo, STATUTS, type Plan, type SectionTexte, type Statut } from '../../domaine/plan'
@@ -7,12 +17,16 @@ import { normaliser } from '../../domaine/typographie/normaliser'
 import type { Atelier, EtatOuvert } from '../../etat/atelier'
 import { Dialogue } from '../commun/Dialogue'
 import { IconeHorsTexte, IconeMoins, IconePlus } from '../commun/icones'
+import { BandeauFusion } from '../commun/BandeauFusion'
 import { IndicateurSynchro } from '../commun/IndicateurSynchro'
 import { formaterNombre, motsDe, motsParSection, type MotsSection } from '../plan/format'
 import { afficherInsecables, useInsecablesVisibles } from '../preferences'
 import type { Route, Selection } from '../routes'
 import { Editeur, type PoigneeEditeur } from './Editeur'
 import { RechercheGlobale } from './RechercheGlobale'
+
+// La comparaison (@codemirror/merge) ne sert qu'en cas de conflit : chargée à la demande.
+const ComparaisonTexte = lazy(() => import('./ComparaisonTexte'))
 
 interface Proprietes {
   atelier: Atelier
@@ -30,6 +44,7 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
   const [tiroir, setTiroir] = useState(false)
   const [recherche, setRecherche] = useState(false)
   const [concentration, setConcentration] = useState(false)
+  const [comparaison, setComparaison] = useState<{ local: string; distant: string } | null>(null)
   const insecablesVisibles = useInsecablesVisibles()
   const regles = reglesTypo(plan)
   const poignee = useRef<PoigneeEditeur>(null)
@@ -88,6 +103,20 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
       observateur.disconnect()
     }
   }, [concentration])
+
+  /** Fin d'un conflit : on garde ce texte (fusionné à la main, ou celui de l'appareil). */
+  function garder(texte: string) {
+    setComparaison(null)
+    poignee.current?.remplacer(texte, false)
+    void atelier.resoudreConflitTexte(id, 'local')
+  }
+
+  /** Fin d'un conflit : on reprend le texte de GitHub, aussi dans l'éditeur. */
+  function prendreDistant() {
+    setComparaison(null)
+    poignee.current?.remplacer(manuscrit?.textesDistants.get(id) ?? '', true)
+    void atelier.resoudreConflitTexte(id, 'distant')
+  }
 
   function fermerMenu() {
     if (menu.current) menu.current.open = false
@@ -282,6 +311,15 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
               <code>{conflit}</code>, celle de GitHub est restée en place.
             </p>
             <div>
+              <button
+                type="button"
+                className="bouton-principal"
+                onClick={() => {
+                  setComparaison({ local: poignee.current?.texte() ?? '', distant: manuscrit?.textesDistants.get(id) ?? '' })
+                }}
+              >
+                Comparer les deux versions
+              </button>
               <button type="button" onClick={() => void atelier.resoudreConflitTexte(id, 'local')}>
                 Garder la mienne
               </button>
@@ -291,7 +329,7 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
                   const ok = window.confirm(
                     `Le texte de GitHub va remplacer celui de cet appareil. Votre version reste sauvegardée dans ${conflit}. Continuer ?`,
                   )
-                  if (ok) void atelier.resoudreConflitTexte(id, 'distant')
+                  if (ok) prendreDistant()
                 }}
               >
                 Prendre celle de GitHub
@@ -299,6 +337,12 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
             </div>
           </div>
         )}
+        <BandeauFusion
+          fusion={etat.fusion}
+          fermer={() => {
+            atelier.oublierFusion()
+          }}
+        />
         {reserves.length > 0 && (
           <p className="bandeau bandeau-attention" role="status">
             {reserves.length === 1 ? 'Ligne' : 'Lignes'} {reserves.map((r) => r.ligne).join(', ')} : les titres <code>#</code> et{' '}
@@ -344,6 +388,21 @@ export function ModeRedaction({ atelier, etat, plan, id, selection, naviguer }: 
         </button>
       )}
 
+      {comparaison && conflit && (
+        <Suspense fallback={<div className="comparaison ecran-attente">Ouverture de la comparaison…</div>}>
+          <ComparaisonTexte
+            titre={section.titre}
+            distant={comparaison.distant}
+            local={comparaison.local}
+            sauvegarde={conflit}
+            garder={garder}
+            prendreDistant={prendreDistant}
+            fermer={() => {
+              setComparaison(null)
+            }}
+          />
+        </Suspense>
+      )}
       {tiroir && (
         <Dialogue titre="Sections" onFermer={() => { setTiroir(false) }}>
           {navigation}

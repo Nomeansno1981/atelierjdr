@@ -79,8 +79,10 @@ export interface EtatOuvert {
   synchro: EtatSynchro
   /** Nombre de modifications pas encore envoyées (opérations du plan et textes). */
   enAttente: number
-  /** Plan trouvé sur GitHub quand il a changé ailleurs pendant nos modifications. */
+  /** Plan trouvé sur GitHub quand il a changé ailleurs et n'a pas pu être fusionné. */
   conflit: Plan | null
+  /** Le plan vient d'être fusionné avec celui d'un autre appareil : ce qui a été remplacé. */
+  fusion: { remplacements: string[] } | null
   /** Description de l'opération que Cmd+Z annulerait. */
   annulable: string | null
   retablissable: string | null
@@ -128,6 +130,7 @@ export class Atelier {
   /** Textes modifiés en mémoire, pas encore écrits dans IndexedDB. */
   private readonly ecrituresEnAttente = new Set<string>()
   private conflit: Plan | null = null
+  private fusion: { remplacements: string[] } | null = null
   private forcerProchainEnvoi = false
   private annulations: EntreeHistorique[] = []
   private retablissements: EntreeHistorique[] = []
@@ -161,6 +164,7 @@ export class Atelier {
       synchro: synchro ?? this.etat.synchro,
       enAttente: (this.brouillon?.descriptions.length ?? 0) + this.brouillonsTexte.size,
       conflit: this.conflit,
+      fusion: this.fusion,
       annulable: this.annulations.at(-1)?.description ?? null,
       retablissable: this.retablissements.at(-1)?.description ?? null,
     })
@@ -311,6 +315,7 @@ export class Atelier {
       synchro: { etat: 'en-cours' },
       enAttente: 0,
       conflit: null,
+      fusion: null,
       annulable: null,
       retablissable: null,
     })
@@ -383,6 +388,7 @@ export class Atelier {
     this.brouillon = {
       plan,
       shaPlanBase: precedent ? precedent.shaPlanBase : (this.donnees?.shaPlan ?? null),
+      ...(precedent ? (precedent.planBase ? { planBase: precedent.planBase } : {}) : this.donnees?.plan ? { planBase: this.donnees.plan } : {}),
       descriptions: [...(precedent?.descriptions ?? []), description],
       aSupprimer: suppressions,
       revision: (precedent?.revision ?? 0) + 1,
@@ -395,6 +401,12 @@ export class Atelier {
       this.signalerEchecLocal()
     }
     this.programmer('plan', this.options.delaiEnvoiMs ?? DELAI_ENVOI_PLAN_MS)
+  }
+
+  /** Ferme la notification de fusion du plan. */
+  oublierFusion(): void {
+    this.fusion = null
+    this.publier()
   }
 
   /** Choix de l'utilisateur après un conflit sur le plan. */
@@ -666,6 +678,7 @@ export class Atelier {
       plan: planEnvoye?.plan ?? null,
       shaPlanBase: planEnvoye?.shaPlanBase ?? null,
       forcer: this.forcerProchainEnvoi,
+      fusion: planEnvoye?.planBase ? { base: planEnvoye.planBase, modifieLe: planEnvoye.modifieLe } : undefined,
       aSupprimer: planEnvoye?.aSupprimer ?? [],
       textes,
       message: (conflits) =>
@@ -679,6 +692,13 @@ export class Atelier {
     if (resultat.type === 'conflit') {
       this.conflit = resultat.planDistant
       return []
+    }
+
+    if (resultat.fusion) {
+      // Le plan affiché change sous les pas de l'historique d'annulation.
+      this.fusion = resultat.fusion
+      this.annulations = []
+      this.retablissements = []
     }
 
     // Le plan envoyé devient la nouvelle référence, avant même la
@@ -696,6 +716,7 @@ export class Atelier {
         this.brouillon = {
           ...actuel,
           shaPlanBase: shaPlan,
+          planBase: resultat.plan,
           descriptions: actuel.descriptions.slice(planEnvoye.descriptions.length),
           aSupprimer: (actuel.aSupprimer ?? []).slice((planEnvoye.aSupprimer ?? []).length),
         }

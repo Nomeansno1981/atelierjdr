@@ -22,7 +22,7 @@ const CSP = [
   "default-src 'none'",
   "script-src 'self'",
   `style-src 'self' 'nonce-${NONCE_STYLES}'`,
-  "img-src 'self' data:",
+  "img-src 'self'",
   "font-src 'self'",
   'connect-src https://api.github.com',
   "manifest-src 'self'",

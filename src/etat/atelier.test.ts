@@ -4,6 +4,8 @@ import { changerPages, creerSection, deplacer, modifierSection, supprimerSection
 import { lirePlan, serialiserPlan } from '../domaine/plan'
 import { lireExemple } from '../test/exemple'
 import { FauxGitHub } from '../test/fauxGitHub'
+import { shaBlobGit } from '../github/empreinte'
+import { Cache } from '../stockage/cache'
 import { Atelier, type EtatAtelier } from './atelier'
 
 let numero = 0
@@ -219,30 +221,59 @@ describe('Atelier : opérations du plan', () => {
     expect(faux.envois).toBe(1)
   })
 
-  it('signale un conflit sur le plan et laisse choisir', async () => {
+  it('plan modifié ailleurs pendant les modifications ici : fusionné automatiquement', async () => {
     const { atelier, faux } = await ouvert()
     const ailleurs = deplacer(lirePlan(lireExemple()['plan.json'] ?? ''), LE_HEURT, 0)
-    await faux.publier({ ...lireExemple(), 'plan.json': serialiserPlan(ailleurs) })
+    await faux.publier({ ...lireExemple(), 'plan.json': serialiserPlan(ailleurs) }, 'ailleurs', new Date(Date.now() - 60_000))
 
     atelier.modifierPlan((p) => deplacer(p, LEXIQUE, 0), 'déplacement de Lexique')
     await atelier.envoyerMaintenant()
     const etat = enAtelier(atelier.lire())
-    expect(etat.conflit?.sections[0]?.id).toBe(LE_HEURT)
-    expect(ordre(atelier)[0]).toBe(LEXIQUE) // la version locale reste affichée
-    expect(faux.envois).toBe(0)
+    expect(etat.conflit).toBeNull()
+    // Les deux appareils ont réordonné : l'ordre le plus récent (celui d'ici) l'emporte.
+    expect(etat.fusion?.remplacements.some((r) => r.includes('ordre des sections'))).toBe(true)
+    expect(lirePlan(faux.fichiers()['plan.json'] ?? '').sections[0]?.id).toBe(LEXIQUE)
+  })
+
+  /** Simule un brouillon d'une version antérieure, sans base commune connue. */
+  async function brouillonSansBase(nomBase: string, plan: ReturnType<typeof lirePlan>) {
+    const cache = await Cache.ouvrir(nomBase)
+    await cache.enregistrerBrouillon({
+      plan,
+      shaPlanBase: await shaBlobGit(lireExemple()['plan.json'] ?? ''),
+      descriptions: ['déplacement de Lexique'],
+      revision: 1,
+      modifieLe: new Date().toISOString(),
+    })
+    cache.fermer()
+  }
+
+  it('sans base commune connue : conflit signalé, « garder la mienne »', async () => {
+    const { faux, nomBase } = await ouvert()
+    const exemple = lirePlan(lireExemple()['plan.json'] ?? '')
+    await brouillonSansBase(nomBase, deplacer(exemple, LEXIQUE, 0))
+    await faux.publier({ ...lireExemple(), 'plan.json': serialiserPlan(deplacer(exemple, LE_HEURT, 0)) })
+
+    const atelier = new Atelier({ fetch: faux.enFetch(), nomBase, delaiEnvoiMs: 60_000 })
+    await atelier.demarrer()
+    await atelier.synchroniser()
+    expect(enAtelier(atelier.lire()).conflit?.sections[0]?.id).toBe(LE_HEURT)
+    expect(ordre(atelier)[0]).toBe(LEXIQUE)
 
     await atelier.resoudreConflit('local')
     expect(enAtelier(atelier.lire()).conflit).toBeNull()
     expect(lirePlan(faux.fichiers()['plan.json'] ?? '').sections[0]?.id).toBe(LEXIQUE)
   })
 
-  it('prendre la version de GitHub abandonne le brouillon', async () => {
-    const { atelier, faux } = await ouvert()
-    const ailleurs = deplacer(lirePlan(lireExemple()['plan.json'] ?? ''), LE_HEURT, 0)
-    await faux.publier({ ...lireExemple(), 'plan.json': serialiserPlan(ailleurs) })
-    atelier.modifierPlan((p) => deplacer(p, LEXIQUE, 0), 'déplacement de Lexique')
-    await atelier.envoyerMaintenant()
+  it('sans base commune connue : « prendre celle de GitHub » abandonne le brouillon', async () => {
+    const { faux, nomBase } = await ouvert()
+    const exemple = lirePlan(lireExemple()['plan.json'] ?? '')
+    await brouillonSansBase(nomBase, deplacer(exemple, LEXIQUE, 0))
+    await faux.publier({ ...lireExemple(), 'plan.json': serialiserPlan(deplacer(exemple, LE_HEURT, 0)) })
 
+    const atelier = new Atelier({ fetch: faux.enFetch(), nomBase, delaiEnvoiMs: 60_000 })
+    await atelier.demarrer()
+    await atelier.synchroniser()
     await atelier.resoudreConflit('distant')
     expect(ordre(atelier)[0]).toBe(LE_HEURT)
     expect(enAtelier(atelier.lire())).toMatchObject({ enAttente: 0, conflit: null, annulable: null })
@@ -450,5 +481,96 @@ describe('Atelier : textes', () => {
     const { atelier } = await ouvert()
     atelier.modifierPlan((p) => modifierSection(p, LE_HEURT, { titre: 'Le choc' }), 'modification de Le heurt')
     expect(manuscrit(atelier)?.textes.get(LE_HEURT)).toBe(exemple['sections/le-heurt.md'])
+  })
+})
+
+describe('Atelier : deux appareils', () => {
+  const LE_HEURT = 'k7f3qa'
+  const LEXIQUE = 'l7k3pw'
+
+  async function appareil(faux: FauxGitHub) {
+    let reseau = true
+    const fetchVariable: typeof fetch = (e, i) => (reseau ? faux.enFetch()(e, i) : Promise.reject(new TypeError('hors ligne')))
+    const atelier = new Atelier({ fetch: fetchVariable, nomBase: `test-appareil-${++numero}`, delaiEnvoiMs: 60_000, delaiEnvoiTexteMs: 60_000 })
+    await atelier.demarrer()
+    await atelier.seConnecter('jeton-valide', 'autrice/katastrophe')
+    await atelier.synchroniser()
+    return {
+      atelier,
+      couper: (oui: boolean) => {
+        reseau = !oui
+      },
+    }
+  }
+  const planDe = (a: Atelier) => {
+    const p = enAtelier(a.lire()).manuscrit?.plan
+    if (!p) throw new Error('pas de plan')
+    return p
+  }
+
+  it('plan modifié hors ligne sur deux appareils : fusionné, rien de perdu', async () => {
+    const faux = await FauxGitHub.creer(lireExemple())
+    const a = await appareil(faux)
+    const b = await appareil(faux)
+    a.couper(true)
+    b.couper(true)
+    a.atelier.modifierPlan((p) => deplacer(p, LEXIQUE, 0), 'déplacement de Lexique')
+    b.atelier.modifierPlan((p) => changerPages(p, LE_HEURT, 1), 'Le heurt sur 3 pages')
+
+    a.couper(false)
+    await a.atelier.envoyerMaintenant()
+    b.couper(false)
+    await b.atelier.envoyerMaintenant()
+
+    const surGitHub = lirePlan(faux.fichiers()['plan.json'] ?? '')
+    expect(surGitHub.sections[0]?.id).toBe(LEXIQUE)
+    expect(surGitHub.sections.find((s) => s.id === LE_HEURT)?.pages).toBe(3)
+    expect(enAtelier(b.atelier.lire()).fusion).toEqual({ remplacements: [] })
+    expect(enAtelier(b.atelier.lire()).conflit).toBeNull()
+    expect(serialiserPlan(planDe(b.atelier))).toBe(serialiserPlan(surGitHub))
+
+    await a.atelier.synchroniser()
+    expect(serialiserPlan(planDe(a.atelier))).toBe(serialiserPlan(surGitHub))
+  })
+
+  it('même champ changé des deux côtés : la modification la plus récente l’emporte, et c’est signalé', async () => {
+    const faux = await FauxGitHub.creer(lireExemple())
+    const a = await appareil(faux)
+    const b = await appareil(faux)
+    b.couper(true)
+    // B modifie d'abord, A ensuite et envoie : la version de A est la plus récente.
+    b.atelier.modifierPlan((p) => modifierSection(p, LE_HEURT, { statut: 'definitif' }), 'statut')
+    await new Promise((r) => setTimeout(r, 20))
+    a.atelier.modifierPlan((p) => modifierSection(p, LE_HEURT, { statut: 'relu' }), 'statut')
+    await a.atelier.envoyerMaintenant()
+    b.couper(false)
+    await b.atelier.envoyerMaintenant()
+
+    expect(lirePlan(faux.fichiers()['plan.json'] ?? '').sections.find((s) => s.id === LE_HEURT)?.statut).toBe('relu')
+    const remplacements = enAtelier(b.atelier.lire()).fusion?.remplacements ?? []
+    expect(remplacements).toHaveLength(1)
+    expect(remplacements[0]).toContain('Le heurt : statut')
+    b.atelier.oublierFusion()
+    expect(enAtelier(b.atelier.lire()).fusion).toBeNull()
+  })
+
+  it('même texte modifié hors ligne sur deux appareils : aucune perte, conflit affiché', async () => {
+    const faux = await FauxGitHub.creer(lireExemple())
+    const a = await appareil(faux)
+    const b = await appareil(faux)
+    a.couper(true)
+    b.couper(true)
+    a.atelier.modifierTexte(LE_HEURT, 'Version de A.\n')
+    b.atelier.modifierTexte(LE_HEURT, 'Version de B.\n')
+    a.couper(false)
+    await a.atelier.envoyerMaintenant()
+    b.couper(false)
+    await b.atelier.envoyerMaintenant()
+
+    const fichiers = faux.fichiers()
+    expect(fichiers['sections/le-heurt.md']).toBe('Version de A.\n')
+    const sauvegarde = enAtelier(b.atelier.lire()).manuscrit?.conflitsTexte.get(LE_HEURT) ?? ''
+    expect(fichiers[sauvegarde]).toBe('Version de B.\n')
+    expect(enAtelier(b.atelier.lire()).manuscrit?.textesDistants.get(LE_HEURT)).toBe('Version de A.\n')
   })
 })

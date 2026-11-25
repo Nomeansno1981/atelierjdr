@@ -11,6 +11,7 @@
  */
 
 import { baseDuChemin, cheminLibre, type Dossier } from '../domaine/nomFichier'
+import { fusionnerPlans } from '../domaine/fusionPlan'
 import { lirePlan, serialiserPlan, toutesLesSections, type Plan } from '../domaine/plan'
 import { shaBlobGit } from './empreinte'
 import { ErreurGitHub, type ClientGitHub, type Depot } from './client'
@@ -159,6 +160,12 @@ export interface DemandeEnvoi {
   shaPlanBase: string | null
   /** Envoie le plan même si plan.json a changé sur GitHub entre-temps. */
   forcer: boolean
+  /**
+   * Base commune et date de la dernière modification locale : si plan.json
+   * a changé sur GitHub, les deux versions sont fusionnées au lieu de
+   * signaler un conflit.
+   */
+  fusion?: { base: Plan; modifieLe: string } | undefined
   /** Sections dont la corbeille a été vidée : leurs fichiers sont supprimés. */
   aSupprimer?: readonly string[]
   textes?: readonly TexteAEnvoyer[]
@@ -176,6 +183,8 @@ export type ResultatEnvoi =
       textes: ReadonlyMap<string, ResultatTexte>
       /** Contenus écrits : connus de l'appareil, inutile de les retélécharger. */
       contenus: string[]
+      /** Le plan a été fusionné avec celui de GitHub ; ce qui a été remplacé. */
+      fusion: { remplacements: string[] } | null
     }
   | { type: 'conflit'; planDistant: Plan; shaPlanDistant: string }
 
@@ -199,13 +208,20 @@ export async function envoyer(
     }
     const texteDistant = await lireBlob(client, depot, shaPlanDistant)
     const planDistant = lirePlan(texteDistant)
+    let planLocal = demande.plan ?? planDistant
+    let fusion: { remplacements: string[] } | null = null
     if (demande.plan && !demande.forcer && shaPlanDistant !== demande.shaPlanBase) {
-      return { type: 'conflit', planDistant, shaPlanDistant }
+      if (!demande.fusion) return { type: 'conflit', planDistant, shaPlanDistant }
+      // Fusion à trois voies ; à champ égal, la modification la plus récente l'emporte.
+      const localPlusRecent = Date.parse(demande.fusion.modifieLe) >= Date.parse(instantane.date ?? '1970-01-01T00:00:00Z')
+      const r = fusionnerPlans(demande.fusion.base, demande.plan, planDistant, localPlusRecent)
+      planLocal = r.plan
+      fusion = { remplacements: r.remplacements }
     }
 
     const { entrees, plan } = changementsFichiers(
       planDistant,
-      demande.plan ?? planDistant,
+      planLocal,
       instantane.fichiers,
       new Set(demande.aSupprimer ?? []),
     )
@@ -222,7 +238,7 @@ export async function envoyer(
       entrees.push({ path: CHEMIN_PLAN, mode: '100644', type: 'blob', content: contenuPlan })
     }
     contenus.push(contenuPlan, '')
-    if (entrees.length === 0) return { type: 'envoye', commit: tete, plan, contenuPlan, textes: resultats, contenus }
+    if (entrees.length === 0) return { type: 'envoye', commit: tete, plan, contenuPlan, textes: resultats, contenus, fusion }
 
     const arbre = await client.ecrire('POST', `${racine}/git/trees`, {
       base_tree: instantane.arbre,
@@ -235,7 +251,7 @@ export async function envoyer(
     })
     try {
       await client.ecrire('PATCH', `${racine}/git/refs/heads/${nomRef}`, { sha: sha(commit), force: false })
-      return { type: 'envoye', commit: sha(commit), plan, contenuPlan, textes: resultats, contenus }
+      return { type: 'envoye', commit: sha(commit), plan, contenuPlan, textes: resultats, contenus, fusion }
     } catch (e) {
       // Un autre appareil a envoyé entre notre lecture et notre écriture :
       // on recommence sur la nouvelle tête de branche.

@@ -297,7 +297,7 @@ test.describe('zoom', () => {
   })
 })
 
-test('conflit sur le plan : bandeau et choix', async ({ page }) => {
+test('plan modifié ailleurs pendant les modifications ici : fusion annoncée', async ({ page }) => {
   const { faux } = await ouvrir(page)
   const exemple = lireExemple()
   const ailleurs = JSON.parse(exemple['plan.json'] ?? '') as { livre: { titre: string } }
@@ -306,10 +306,11 @@ test('conflit sur le plan : bandeau et choix', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Une page de plus pour Lexique' }).click()
   await page.getByRole('button', { name: 'Synchroniser' }).click()
-  await expect(page.getByRole('alert')).toContainText('modifié sur un autre appareil')
-  await expect(etat(page)).toHaveText('Conflit')
-
-  await page.getByRole('button', { name: 'Garder la mienne' }).click()
+  await expect(page.locator('.bandeau-fusion')).toContainText('les deux versions ont été fusionnées')
   await expect(etat(page)).toHaveText('Synchronisé')
-  expect(lirePlan(faux.fichiers()['plan.json'] ?? '').sections.at(-1)?.pages).toBe(3)
+  const plan = lirePlan(faux.fichiers()['plan.json'] ?? '')
+  expect(plan.livre.titre).toBe('Katastrophê (iPad)')
+  expect(plan.sections.at(-1)?.pages).toBe(3)
+  await page.getByRole('button', { name: 'Compris' }).click()
+  await expect(page.locator('.bandeau-fusion')).toHaveCount(0)
 })

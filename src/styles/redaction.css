@@ -400,3 +400,154 @@
   background: var(--hachure);
   box-shadow: 0 0 0 1px var(--hachure);
 }
+
+/* --- Fusion du plan et comparaison des textes en conflit ------------------- */
+
+.bandeau-fusion ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.bandeau-fusion button {
+  margin-top: 4px;
+}
+
+.comparaison {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--fond);
+}
+
+.comparaison-entete {
+  display: grid;
+  gap: 6px;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 8px
+    max(16px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--bordure);
+  background: var(--surface);
+}
+
+.comparaison-entete h2 {
+  font-size: 1.1rem;
+}
+
+.comparaison-colonnes {
+  display: none;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--texte-doux);
+}
+
+.comparaison-editeurs {
+  overflow: auto;
+  padding: 0 max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+  font-family: var(--police-ecriture);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.comparaison-editeurs .cm-editor {
+  background: transparent;
+  color: var(--texte);
+}
+
+.comparaison-editeurs .cm-editor.cm-focused {
+  outline: none;
+}
+
+.comparaison-editeurs .cm-scroller {
+  font-family: inherit;
+  line-height: inherit;
+}
+
+/* Couleurs des différences, lisibles en clair comme en sombre. */
+.comparaison-editeurs .cm-changedLine,
+.comparaison-editeurs .cm-inlineChangedLine {
+  background: color-mix(in srgb, var(--statut-definitif-trait) 14%, transparent);
+}
+
+.comparaison-editeurs .cm-changedText {
+  background: color-mix(in srgb, var(--statut-definitif-trait) 30%, transparent);
+}
+
+.comparaison-editeurs .cm-merge-a .cm-changedLine,
+.comparaison-editeurs .cm-deletedChunk {
+  background: color-mix(in srgb, var(--erreur) 12%, transparent);
+}
+
+.comparaison-editeurs .cm-merge-a .cm-changedText,
+.comparaison-editeurs .cm-deletedChunk .cm-deletedText {
+  background: color-mix(in srgb, var(--erreur) 26%, transparent);
+}
+
+.comparaison-editeurs .cm-merge-revert button,
+.comparaison-editeurs .cm-chunkButtons button {
+  min-height: 32px;
+  padding: 0 8px;
+}
+
+.comparaison-actions {
+  margin: 0;
+  padding: 10px max(16px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  border-top: 1px solid var(--bordure);
+  background: var(--surface);
+}
+
+/* Sur téléphone : boutons sur deux colonnes, l'éditeur garde la place. */
+.comparaison-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.comparaison-actions .espace,
+.comparaison-aide-large {
+  display: none;
+}
+
+.comparaison-actions button {
+  min-height: 40px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+}
+
+.comparaison-actions .bouton-principal {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 768px) {
+  .comparaison-colonnes {
+    display: grid;
+  }
+
+  .comparaison-aide-etroite {
+    display: none;
+  }
+
+  .comparaison-aide-large {
+    display: block;
+  }
+
+  .comparaison-actions {
+    display: flex;
+  }
+
+  .comparaison-actions .espace {
+    display: block;
+  }
+
+  .comparaison-actions button {
+    min-height: var(--cible-tactile);
+    font-size: 1rem;
+  }
+
+  .comparaison-actions .bouton-principal {
+    grid-column: auto;
+  }
+}

@@ -19,6 +19,7 @@ interface Commit {
   arbre: string
   parents: string[]
   message: string
+  date: string
 }
 
 export class FauxGitHub {
@@ -47,11 +48,11 @@ export class FauxGitHub {
   }
 
   /** Remplace tout le contenu du dépôt par un nouveau commit (comme un autre appareil). */
-  async publier(fichiers: Record<string, string>, message = 'Modification ailleurs'): Promise<void> {
+  async publier(fichiers: Record<string, string>, message = 'Modification ailleurs', date = new Date()): Promise<void> {
     const arbre = new Map<string, string>()
     for (const [chemin, contenu] of Object.entries(fichiers)) arbre.set(chemin, await this.ajouterBlob(contenu))
     const shaArbre = this.ajouterArbre(arbre)
-    this.commit = this.ajouterCommit({ arbre: shaArbre, parents: this.commit ? [this.commit] : [], message })
+    this.commit = this.ajouterCommit({ arbre: shaArbre, parents: this.commit ? [this.commit] : [], message, date: date.toISOString() })
   }
 
   /** Contenu des fichiers en tête de branche. */
@@ -104,7 +105,9 @@ export class FauxGitHub {
       const commit = /^\/git\/commits\/(\w+)$/.exec(reste)?.[1]
       if (commit !== undefined) {
         const c = this.commits.get(commit)
-        return c ? ok({ sha: commit, tree: { sha: c.arbre }, parents: c.parents.map((sha) => ({ sha })) }) : introuvable()
+        return c
+          ? ok({ sha: commit, tree: { sha: c.arbre }, parents: c.parents.map((sha) => ({ sha })), committer: { date: c.date } })
+          : introuvable()
       }
       const arbre = /^\/git\/trees\/(\w+)$/.exec(reste)?.[1]
       if (arbre !== undefined && adresse.searchParams.get('recursive') === '1') {
@@ -137,7 +140,12 @@ export class FauxGitHub {
     if (methode === 'POST' && reste === '/git/commits') {
       const arbre = String(donnees.tree)
       if (!this.arbres.has(arbre)) return { statut: 422, corps: { message: 'Arbre inconnu' } }
-      const sha = this.ajouterCommit({ arbre, parents: donnees.parents as string[], message: String(donnees.message) })
+      const sha = this.ajouterCommit({
+        arbre,
+        parents: donnees.parents as string[],
+        message: String(donnees.message),
+        date: new Date().toISOString(),
+      })
       return { statut: 201, corps: { sha } }
     }
     if (methode === 'PATCH' && reste === `/git/refs/heads/${this.branche}`) {

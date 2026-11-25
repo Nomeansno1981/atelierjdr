@@ -18,6 +18,11 @@ export interface PoigneeEditeur {
   /** Normalise la typographie de la section ; renvoie le nombre de remplacements. */
   normaliser: () => number
   texte: () => string
+  /**
+   * Remplace tout le texte (fin d'un conflit). `deGitHub` : c'est le texte de
+   * GitHub repris tel quel, pas une modification à envoyer.
+   */
+  remplacer: (texte: string, deGitHub: boolean) => void
 }
 
 /** Marque les remplacements venus de GitHub : ce ne sont pas des frappes. */
@@ -74,6 +79,16 @@ export function Editeur({
   useImperativeHandle(ref, () => ({
     normaliser: () => (vue.current ? normaliserEditeur(vue.current, configuration.current.regles) : 0),
     texte: () => vue.current?.state.doc.toString() ?? '',
+    remplacer: (texte, deGitHub) => {
+      const v = vue.current
+      if (!v || v.state.doc.toString() === texte) return
+      v.dispatch({
+        changes: { from: 0, to: v.state.doc.length, insert: texte },
+        selection: EditorSelection.cursor(Math.min(v.state.selection.main.head, texte.length)),
+        userEvent: 'input.fusion',
+        ...(deGitHub ? { annotations: venuDeGitHub.of(true) } : {}),
+      })
+    },
   }))
 
   function creerEtat(contenu: string): EditorState {

@@ -40,6 +40,8 @@ export interface BrouillonPlan {
   plan: Plan
   /** SHA de plan.json au début des modifications : sert à détecter un conflit. */
   shaPlanBase: string | null
+  /** Le plan au début des modifications : base commune d'une fusion à trois voies. */
+  planBase?: Plan
   /** Descriptions des opérations, pour le message de commit. */
   descriptions: string[]
   /** Sections dont la corbeille a été vidée : leurs fichiers seront supprimés. */
