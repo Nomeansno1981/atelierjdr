@@ -223,9 +223,17 @@ test('créer une section : fichier vide créé sur GitHub', async ({ page }) => 
   expect(erreurs).toEqual([])
 })
 
-test('le bouton + d’un post-it insère avant lui', async ({ page }) => {
+test('les « + » d’un post-it insèrent avant et après lui ; entre deux voisins, un seul', async ({ page }) => {
   await ouvrir(page)
-  await page.getByRole('button', { name: 'Nouvelle section avant Le heurt' }).click()
+  // Créer son personnage et Le heurt se touchent sur la même double page : un seul « + » entre eux.
+  await expect(page.getByRole('button', { name: 'Nouvelle section avant Le heurt' })).toHaveCount(0)
+  // Page de titre et Avant-propos sont sur deux doubles pages : un « + » de chaque côté.
+  await expect(page.getByRole('button', { name: 'Nouvelle section après Page de titre' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Nouvelle section avant Avant-propos' })).toHaveCount(1)
+  // Le dernier post-it a son « + » à droite.
+  await expect(page.getByRole('button', { name: 'Nouvelle section après Lexique' })).toHaveCount(1)
+
+  await page.getByRole('button', { name: 'Nouvelle section après Créer son personnage' }).click()
   const dialogue = page.getByRole('dialog', { name: 'Nouvelle section' })
   await dialogue.getByLabel('Hors-texte').check()
   await dialogue.getByLabel('Titre', { exact: true }).fill('Fiche de personnage')

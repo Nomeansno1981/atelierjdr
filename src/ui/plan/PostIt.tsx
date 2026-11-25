@@ -13,6 +13,7 @@ export interface ActionsPostIt {
   modifier: (id: string) => void
   changerPages: (id: string, delta: number) => void
   creerAvant: (id: string) => void
+  creerApres: (id: string) => void
   touche: (e: KeyboardEvent, id: string) => void
 }
 
@@ -30,6 +31,8 @@ interface Proprietes {
   source?: boolean
   /** Ligne d'insertion du post-it glissé, à ce bord-ci. */
   insertion?: 'avant' | 'apres' | undefined
+  /** « + » au bord gauche (nouvelle section avant) et au bord droit (après). */
+  inserer?: { avant: boolean; apres: boolean; avantDecale: boolean; apresDecale: boolean }
   actions: ActionsPostIt
 }
 
@@ -45,6 +48,7 @@ export function PostIt({
   place,
   source = false,
   insertion,
+  inserer = { avant: false, apres: false, avantDecale: false, apresDecale: false },
   actions,
 }: Proprietes) {
   // Seul le premier segment se saisit : il porte l'identifiant de la section.
@@ -161,19 +165,35 @@ export function PostIt({
               <IconePlus />
             </button>
           </div>
-          <button
-            type="button"
-            className="postit-inserer"
-            aria-label={`Nouvelle section avant ${section.titre}`}
-            title="Nouvelle section ici"
-            {...sansGlisser}
-            onClick={() => {
-              actions.creerAvant(section.id)
-            }}
-          >
-            <IconePlus />
-          </button>
         </>
+      )}
+      {inserer.avant && (
+        <button
+          type="button"
+          className={`postit-inserer${inserer.avantDecale ? ' postit-inserer-bas' : ''}`}
+          aria-label={`Nouvelle section avant ${section.titre}`}
+          title="Nouvelle section ici"
+          {...sansGlisser}
+          onClick={() => {
+            actions.creerAvant(section.id)
+          }}
+        >
+          <IconePlus />
+        </button>
+      )}
+      {inserer.apres && (
+        <button
+          type="button"
+          className={`postit-inserer postit-inserer-apres${inserer.apresDecale ? ' postit-inserer-haut' : ''}`}
+          aria-label={`Nouvelle section après ${section.titre}`}
+          title="Nouvelle section ici"
+          {...sansGlisser}
+          onClick={() => {
+            actions.creerApres(section.id)
+          }}
+        >
+          <IconePlus />
+        </button>
       )}
     </div>
   )

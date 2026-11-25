@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { lireExemple } from '../test/exemple'
 import { creerSection, deplacer, modifierSection, restaurerSection, supprimerSection } from './operations'
 import {
+  commencerPartieA,
   deplacerPartie,
   estRegroupe,
   finDePartie,
@@ -147,5 +148,38 @@ describe('parties', () => {
     const premiere = fusionnerPartie(exemple(), 'presentation')
     expect(partieDe(premiere, 't9e2rk')).toBe('regles')
     expect(ids(premiere)).toEqual(ORDRE)
+  })
+})
+
+describe('commencer une partie à une section', () => {
+  it('une partie vide posée au milieu d’une autre y commence et reprend la suite', () => {
+    // Votre cas : « Les règles » vide, posée sur la deuxième section de la Présentation.
+    let plan = { ...exemple(), sections: exemple().sections.map((s) => (s.partie === 'regles' ? { ...s, partie: 'presentation' } : s)) }
+    plan = commencerPartieA(plan, 'regles', 'c3w7mj')
+    expect(parties(plan)).toEqual(['presentation', 'regles', 'lexique'])
+    expect(ids(plan)).toEqual(ORDRE)
+    expect(['t9e2rk', 'v4n8hs'].map((id) => partieDe(plan, id))).toEqual(['presentation', 'presentation'])
+    expect(ORDRE.slice(2, 9).map((id) => partieDe(plan, id))).toEqual(Array(7).fill('regles'))
+  })
+
+  it('une partie pleine posée au milieu d’une autre : elle vient après elle, sa suite d’abord, ses sections ensuite', () => {
+    const plan = commencerPartieA(exemple(), 'lexique', 'v4n8hs')
+    expect(parties(plan)).toEqual(['presentation', 'lexique', 'regles'])
+    expect(ids(plan)).toEqual(['t9e2rk', 'v4n8hs', 'c3w7mj', 'l7k3pw', ...ORDRE.slice(3, 9)])
+    expect(['v4n8hs', 'c3w7mj', 'l7k3pw'].map((id) => partieDe(plan, id))).toEqual(['lexique', 'lexique', 'lexique'])
+    expect(estRegroupe(plan)).toBe(true)
+  })
+
+  it('sur la première section d’une autre partie : placée entière avant elle', () => {
+    expect(commencerPartieA(exemple(), 'lexique', 's8q1lz')).toEqual(deplacerPartie(exemple(), 'lexique', 1))
+  })
+
+  it('sur une de ses sections : son début recule, la précédente reprend celles d’avant', () => {
+    const plan = commencerPartieA(exemple(), 'regles', 'p2m9xd')
+    expect(ids(plan)).toEqual(ORDRE)
+    expect(['s8q1lz', 'k7f3qa'].map((id) => partieDe(plan, id))).toEqual(['presentation', 'presentation'])
+    expect(partieDe(plan, 'p2m9xd')).toBe('regles')
+    // La première partie n'a pas de précédente : rien ne change.
+    expect(commencerPartieA(exemple(), 'presentation', 'v4n8hs')).toEqual(exemple())
   })
 })

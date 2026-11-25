@@ -8,7 +8,7 @@ import {
 } from '@dnd-kit/core'
 import { getEventCoordinates } from '@dnd-kit/utilities'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { cibleInsertion, ciblePartie, type PositionPointeur, type Repere } from '../../domaine/glisser'
+import { cibleInsertion, ciblePartie, type ActionPartie, type PositionPointeur, type Repere } from '../../domaine/glisser'
 import { construireGrille, type PageGrille, type Planche } from '../../domaine/grille'
 import { deplacer as deplacerSection, ordreAvecDeplacement } from '../../domaine/operations'
 import { paginer, type Pagination } from '../../domaine/pagination'
@@ -28,24 +28,23 @@ export interface ProprietesGrille {
   ouvrir: (id: string) => void
   modifier: (id: string) => void
   changerPages: (id: string, delta: number) => void
-  /** Nouvelle section à cet index de l'ordre. */
-  creer: (index: number) => void
+  /** Nouvelle section à cet index de l'ordre, dans cette partie. */
+  creer: (index: number, partie: string) => void
   /** Nouvelle section dans une partie vide. */
   creerDansPartie: (partie: string) => void
   /** Déplace une section ; `partie` : partie d'arrivée, si on la connaît. */
   deplacer: (id: string, index: number, partie?: string) => void
   ouvrirPartie: (id: string) => void
   deplacerPartie: (id: string, index: number) => void
+  /** La partie commence à cette section (son bandeau y a été posé). */
+  commencerPartie: (id: string, section: string) => void
 }
 
 /** Ce que l'on glisse : un post-it, ou une partie entière (au pointeur seulement). */
 interface Glissement {
   type: 'section' | 'partie'
   id: string
-  /**
-   * Section : index d'insertion, compté dans l'ordre sans elle. Partie :
-   * index dans la liste des parties, comptée sans elle.
-   */
+  /** Section : index d'insertion, compté dans l'ordre sans elle. */
   index: number
   /** Section : partie d'arrivée. */
   partie: string
@@ -56,8 +55,8 @@ interface Glissement {
    */
   mode: 'pointeur' | 'clavier'
   repere: Repere | null
-  /** Partie : la voisine à l'arrivée ; null si rien ne change. */
-  voisine: { id: string; cote: 'avant' | 'apres' } | null
+  /** Partie : ce que fera le dépôt ; null si rien ne change. */
+  action: ActionPartie | null
 }
 
 const COLONNE = { gauche: 1, droite: 2 } as const
@@ -115,8 +114,11 @@ export function Grille(props: ProprietesGrille) {
   const destination = useMemo(() => {
     if (!glisse) return null
     if (glisse.type === 'partie') {
-      if (!glisse.voisine) return null
-      return `${glisse.voisine.cote === 'avant' ? 'avant' : 'après'} « ${titreDe(parties, glisse.voisine.id)} »`
+      const action = glisse.action
+      if (!action) return null
+      if (action.type === 'debut') return `commence à « ${plan.sections.find((s) => s.id === action.section)?.titre ?? ''} »`
+      const suivante = plan.parties.filter((p) => p.id !== glisse.id)[action.index]
+      return suivante ? `avant « ${suivante.titre} »` : 'en fin de livre'
     }
     if (!glisse.repere && glisse.mode === 'pointeur') return null
     const apres = deplacerSection(plan, glisse.id, glisse.index, glisse.mode === 'pointeur' ? glisse.partie : undefined)
@@ -125,7 +127,7 @@ export function Grille(props: ProprietesGrille) {
     return [e && pagesAbregees(e), partie === undefined ? '' : (etiquettes.get(partie) ?? partie)]
       .filter(Boolean)
       .join(' · ')
-  }, [plan, glisse, etiquettes, parties])
+  }, [plan, glisse, etiquettes])
 
   function annoncer(id: string, index: number) {
     const s = sections.get(id)
@@ -142,8 +144,9 @@ export function Grille(props: ProprietesGrille) {
     if (image.current !== null) cancelAnimationFrame(image.current)
     if (!g) return
     if (g.type === 'partie') {
-      if (valider && g.voisine) {
-        props.deplacerPartie(g.id, g.index)
+      if (valider && g.action) {
+        if (g.action.type === 'bloc') props.deplacerPartie(g.id, g.action.index)
+        else props.commencerPartie(g.id, g.action.section)
         setAnnonce(`Partie ${titrePartie(g.id)} déplacée.`)
       } else {
         setAnnonce(`Déplacement de la partie ${titrePartie(g.id)} annulé.`)
@@ -174,15 +177,7 @@ export function Grille(props: ProprietesGrille) {
     }
     if (actif.startsWith(PREFIXE_PARTIE)) {
       const id = actif.slice(PREFIXE_PARTIE.length)
-      setGlisse({
-        type: 'partie',
-        id,
-        index: plan.parties.findIndex((p) => p.id === id),
-        partie: '',
-        mode: 'pointeur',
-        repere: null,
-        voisine: null,
-      })
+      setGlisse({ type: 'partie', id, index: -1, partie: '', mode: 'pointeur', repere: null, action: null })
       setAnnonce(`Partie ${titrePartie(id)} saisie.`)
       return
     }
@@ -194,7 +189,7 @@ export function Grille(props: ProprietesGrille) {
       partie: section?.partie ?? '',
       mode: 'pointeur',
       repere: null,
-      voisine: null,
+      action: null,
     })
     setAnnonce(`${section?.titre ?? ''} saisi.`)
   }
@@ -214,7 +209,7 @@ export function Grille(props: ProprietesGrille) {
       const { ordre: o, pagination: p } = courant.current
       if (g.type === 'partie') {
         const c = ciblePartie(o, plan.parties, p, g.id, position)
-        if (c.index !== g.index || !memeRepere(c.repere, g.repere)) setGlisse({ ...g, ...c })
+        if (!memeAction(c.action, g.action) || !memeRepere(c.repere, g.repere)) setGlisse({ ...g, ...c })
         return
       }
       const c = cibleInsertion(o, plan.parties, p, g.id, position)
@@ -228,7 +223,7 @@ export function Grille(props: ProprietesGrille) {
       e.preventDefault()
       if (!g) {
         const index = plan.sections.findIndex((s) => s.id === id)
-        setGlisse({ type: 'section', id, index, partie: '', mode: 'clavier', repere: null, voisine: null })
+        setGlisse({ type: 'section', id, index, partie: '', mode: 'clavier', repere: null, action: null })
         const titre = sections.get(id)?.titre ?? ''
         setAnnonce(
           `${titre} saisi, position ${index + 1} sur ${plan.sections.length}. Flèches pour déplacer, Espace ou Entrée pour déposer, Échap pour annuler.`,
@@ -267,7 +262,12 @@ export function Grille(props: ProprietesGrille) {
     modifier,
     changerPages,
     creerAvant: (id) => {
-      creer(plan.sections.findIndex((s) => s.id === id))
+      const index = plan.sections.findIndex((s) => s.id === id)
+      creer(index, plan.sections[index]?.partie ?? '')
+    },
+    creerApres: (id) => {
+      const index = plan.sections.findIndex((s) => s.id === id)
+      creer(index + 1, plan.sections[index]?.partie ?? '')
     },
     touche,
   }
@@ -278,6 +278,9 @@ export function Grille(props: ProprietesGrille) {
     creerDans: props.creerDansPartie,
   }
   const contexte: ContexteGrille = {
+    plancheDe: (n: number) => (plan.livre.premierePage === 'droite' ? Math.floor(n / 2) : Math.floor((n - 1) / 2)),
+    precedentes: new Map(ordre.map((s, i) => [s.id, ordre[i - 1]])),
+    suivantes: new Map(ordre.map((s, i) => [s.id, ordre[i + 1]])),
     pagination,
     sections,
     etiquettes,
@@ -334,7 +337,7 @@ export function Grille(props: ProprietesGrille) {
           className="ajout-fin"
           data-zone="fin"
           onClick={() => {
-            creer(plan.sections.length)
+            creer(plan.sections.length, plan.parties.at(-1)?.id ?? '')
           }}
         >
           <IconePlus /> Nouvelle section
@@ -362,6 +365,11 @@ export function Grille(props: ProprietesGrille) {
 }
 
 interface ContexteGrille {
+  /** Index de la planche (double page) d'une page. */
+  plancheDe: (page: number) => number
+  /** Section qui précède chacune dans la grille. */
+  precedentes: ReadonlyMap<string, Section | undefined>
+  suivantes: ReadonlyMap<string, Section | undefined>
   pagination: Pagination
   sections: ReadonlyMap<string, Section>
   etiquettes: ReadonlyMap<string, string>
@@ -376,7 +384,34 @@ interface ContexteGrille {
 }
 
 function VuePlanche({ planche, contexte }: { planche: Planche; contexte: ContexteGrille }) {
-  const { pagination, sections, etiquettes, mots, glisse, actions, vides, parties } = contexte
+  const { pagination, sections, etiquettes, mots, glisse, actions, vides, parties, precedentes, suivantes, plancheDe } =
+    contexte
+
+  /**
+   * « + » au bord droit de chaque post-it (après lui) ; au bord gauche
+   * seulement là où aucun « + » ne s'y trouve déjà : en tête de grille, en
+   * début de double page, après une page blanche, ou au début d'une partie
+   * (la section créée y prend alors la partie du post-it de droite).
+   */
+  function boutonsInserer(section: Section, premiere: boolean, derniere: boolean) {
+    /** Deux sections côte à côte, sur la même double page. */
+    const cote = (a: Section | undefined, b: Section | undefined) => {
+      const ea = a && pagination.emplacements.get(a.id)
+      const eb = b && pagination.emplacements.get(b.id)
+      return ea !== undefined && eb !== undefined && ea.derniere + 1 === eb.premiere && plancheDe(ea.derniere) === plancheDe(eb.premiere)
+    }
+    const avantMoi = precedentes.get(section.id)
+    const apresMoi = suivantes.get(section.id)
+    const colleAvant = cote(avantMoi, section)
+    const colleApres = cote(section, apresMoi)
+    return {
+      avant: premiere && !(colleAvant && avantMoi?.partie === section.partie),
+      apres: derniere,
+      // Entre deux parties côte à côte, les deux « + » se partagent l'espace : l'un en haut, l'autre en bas.
+      avantDecale: colleAvant && avantMoi?.partie !== section.partie,
+      apresDecale: colleApres && apresMoi?.partie !== section.partie,
+    }
+  }
   const pages = [planche.gauche, planche.droite].filter((p): p is PageGrille => p !== null)
   const auPointeur = glisse?.mode === 'pointeur'
   const repere = auPointeur ? glisse.repere : null
@@ -447,6 +482,7 @@ function VuePlanche({ planche, contexte }: { planche: Planche; contexte: Context
             place={glisse?.mode === 'clavier' && glisse.id === section.id}
             source={source}
             insertion={insertion}
+            inserer={boutonsInserer(section, !segment.suite, !segment.continue)}
             actions={actions}
           />
         )
@@ -526,6 +562,12 @@ function positionSousPointeur(x: number, y: number): PositionPointeur | null {
 
 function titreDe(parties: ReadonlyMap<string, Partie>, id: string): string {
   return parties.get(id)?.titre ?? id
+}
+
+function memeAction(a: ActionPartie | null, b: ActionPartie | null): boolean {
+  if (a === null || b === null) return a === b
+  if (a.type === 'bloc') return b.type === 'bloc' && a.index === b.index
+  return b.type === 'debut' && a.section === b.section
 }
 
 function memeRepere(a: Repere | null, b: Repere | null): boolean {

@@ -44,6 +44,38 @@ test('glisser le bandeau d’une partie la déplace entière, et la numérotatio
   expect(erreurs).toEqual([])
 })
 
+test('le bandeau d’une partie vide posé sur un post-it : la partie commence à ce post-it', async ({ page, isMobile }) => {
+  // « Les règles » vide : ses sections sont toutes dans la Présentation.
+  const plan = lirePlan(exemple['plan.json'] ?? '')
+  const vide = { ...plan, sections: plan.sections.map((s) => (s.partie === 'regles' ? { ...s, partie: 'presentation' } : s)) }
+  const { faux } = await ouvrir(page, { ...exemple, 'plan.json': serialiserPlan(vide) })
+  await expect(page.locator('.separateur-vide')).toHaveText(['II. Les règles · vide'])
+
+  // Le bandeau vide est au-dessus du Lexique ; on le pose sur « Les conséquences », juste avant.
+  const source = bandeau(page, 'Les règles')
+  const cible = postit(page, 'Les conséquences')
+  await source.scrollIntoViewIfNeeded()
+  if (isMobile) await glisserDoigt(page, source, cible)
+  else await glisserSouris(page, source, cible, { x: 0.7, y: 0.5 })
+
+  await expect(page.locator('.separateur-vide')).toHaveCount(0)
+  await expect(separateurs(page)).toHaveText(['I. Présentation', 'II. Les règles', 'Lexique'])
+  await expect(postit(page, 'La chute').locator('.postit-partie')).toHaveText('I. Présentation')
+  await expect(postit(page, 'Les conséquences').locator('.postit-partie')).toHaveText('II. Les règles')
+  await expect(titres(page)).toHaveText(TITRES)
+  await expect(etat(page)).toHaveText('Synchronisé', { timeout: 15_000 })
+  expect(faux.messages()[0]).toBe('Plan : la partie Les règles commence à Les conséquences')
+})
+
+test('le bandeau d’une partie posé sur une de ses sections : son début recule', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'souris : ordinateur')
+  await ouvrir(page)
+  await glisserSouris(page, bandeau(page, 'Les règles'), postit(page, 'Le heurt'))
+  await expect(postit(page, 'Créer son personnage').locator('.postit-partie')).toHaveText('I. Présentation')
+  await expect(postit(page, 'Le heurt').locator('.postit-partie')).toHaveText('II. Les règles')
+  await expect(titres(page)).toHaveText(TITRES)
+})
+
 test('pendant le glissement d’une partie, rien ne bouge et la silhouette annonce l’arrivée', async ({ page, isMobile }) => {
   test.skip(isMobile, 'souris : ordinateur')
   await ouvrir(page)

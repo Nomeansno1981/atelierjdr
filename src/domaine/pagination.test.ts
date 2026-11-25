@@ -187,33 +187,34 @@ describe('ciblePartie', () => {
   const cible = (id: string, page: number, fraction = 0.5) =>
     ciblePartie(ordre, parties, pagination, id, { type: 'page', page, fraction })
 
-  it('sur la première moitié d’une partie : avant elle, ligne au bord gauche de sa première section', () => {
-    expect(cible('q', 1, 0.5)).toEqual({ index: 0, voisine: { id: 'p', cote: 'avant' }, repere: { type: 'postit', id: 'a', cote: 'avant' } })
+  it('sur la première section d’une autre partie : placée entière avant elle', () => {
+    expect(cible('q', 1)).toEqual({ action: { type: 'bloc', index: 0 }, repere: { type: 'postit', id: 'a', cote: 'avant' } })
   })
 
-  it('sur la seconde moitié : après elle, ligne au bord droit de sa dernière section', () => {
-    expect(cible('p', 6, 0.5)).toEqual({ index: 1, voisine: { id: 'q', cote: 'apres' }, repere: { type: 'postit', id: 'd', cote: 'apres' } })
+  it('sur une section au milieu d’une autre partie : elle y commence, quel que soit le côté visé', () => {
+    expect(cible('q', 3, 0.9)).toEqual({ action: { type: 'debut', section: 'b' }, repere: { type: 'postit', id: 'b', cote: 'avant' } })
+    expect(cible('r', 2, 0.1)).toEqual({ action: { type: 'debut', section: 'b' }, repere: { type: 'postit', id: 'b', cote: 'avant' } })
   })
 
-  it('sur elle-même, ou à sa propre place : rien ne change', () => {
-    expect(cible('p', 2)).toEqual({ index: 0, voisine: null, repere: null })
-    // Avant q, c'est déjà là que se trouve p.
-    expect(cible('p', 5, 0.1)).toEqual({ index: 0, voisine: null, repere: null })
+  it('sur une de ses propres sections : son début recule (s’il y a une partie avant elle)', () => {
+    expect(cible('q', 6)).toEqual({ action: { type: 'debut', section: 'd' }, repere: { type: 'postit', id: 'd', cote: 'avant' } })
+    expect(cible('p', 2)).toEqual({ action: null, repere: null })
+    expect(cible('q', 5)).toEqual({ action: null, repere: null })
   })
 
-  it('sur le bandeau d’une partie vide : avant elle, bandeau signalé', () => {
+  it('sur le bandeau d’une autre partie : avant elle ; sur le sien : rien', () => {
     expect(ciblePartie(ordre, parties, pagination, 'p', { type: 'partie', partie: 'r' })).toEqual({
-      index: 1,
-      voisine: { id: 'r', cote: 'avant' },
+      action: { type: 'bloc', index: 1 },
       repere: { type: 'partie', id: 'r' },
     })
+    expect(ciblePartie(ordre, parties, pagination, 'r', { type: 'partie', partie: 'r' })).toEqual({ action: null, repere: null })
   })
 
   it('en fin de grille : après la dernière partie', () => {
     expect(ciblePartie(ordre, parties, pagination, 'p', { type: 'fin' })).toEqual({
-      index: 2,
-      voisine: { id: 'r', cote: 'apres' },
-      repere: { type: 'partie', id: 'r' },
+      action: { type: 'bloc', index: 2 },
+      repere: { type: 'postit', id: 'd', cote: 'apres' },
     })
+    expect(ciblePartie(ordre, parties, pagination, 'r', { type: 'fin' })).toEqual({ action: null, repere: null })
   })
 })

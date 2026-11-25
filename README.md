@@ -86,16 +86,20 @@ Le plan est un chemin de fer : chaque section est un post-it qui couvre autant d
 | Déplacer une section | Glisser le post-it | Appui long (un tiers de seconde), puis glisser | Espace, flèches, puis Espace ou Entrée (Échap annule) |
 | Modifier | Bouton « … » | Bouton « … » | Tab jusqu’au bouton, Entrée |
 | Changer le nombre de pages | Boutons − et + | Boutons − et + | |
-| Créer une section, un hors-texte, une page blanche ou une partie | « + » au bord gauche d’un post-it (avant lui) ou « Nouvelle section » en fin de grille | idem | |
+| Créer une section, un hors-texte, une page blanche ou une partie | « + » entre deux post-its (au bord droit d’un post-it : après lui ; au bord gauche : avant lui) ou « Nouvelle section » en fin de grille | idem | |
 | Déplacer une partie entière | Glisser son bandeau | Appui long sur son bandeau, puis glisser | Bandeau, Entrée, puis « Placer avant / après » |
 | Annuler, rétablir | Boutons en haut à gauche | idem | Cmd/Ctrl+Z, Cmd/Ctrl+Maj+Z |
 
 - **Pendant un glissement**, la grille ne bouge pas : le post-it reste estompé à sa place, une **ligne rouge** marque l’endroit où il s’insérera (au bord gauche d’un post-it si l’on vise sa première moitié, au bord droit sinon), et la silhouette annonce ses pages et sa partie d’arrivée. La grille se réorganise au dépôt. Au clavier, le post-it se déplace à sa place provisoire.
 - **Parties** : chacune a son **bandeau** dans la grille (« I. Présentation »), au-dessus de la page où elle commence ; une partie vide s’affiche aussi, avec un « + » pour y créer sa première section.
   - **Toucher** un bandeau ouvre ses réglages : titre, numérotation (Partie I, II…), place dans le livre, suppression (si elle est vide) ou fusion avec sa voisine (ses sections y passent).
-  - **Glisser** un bandeau déplace la partie entière, avec ses sections, avant ou après une autre partie ; la ligne rouge marque l’arrivée.
+  - **Glisser** un bandeau : le bandeau marque le début de la partie, et la ligne rouge montre où il se posera.
+    - Posé sur un post-it au milieu d’une autre partie, la partie **commence à ce post-it** : il passe dans la partie, avec ceux qui le suivent dans l’autre (pratique pour une partie encore vide).
+    - Posé sur l’un de ses propres post-its, son début recule jusqu’à lui ; ceux d’avant passent dans la partie précédente.
+    - Posé sur le premier post-it d’une autre partie, sur son bandeau, ou en fin de grille, la partie se déplace **entière**, avec ses sections, avant cette partie (ou à la fin).
   - **Nouvelle partie** : choisissez « Partie » dans la création. Depuis le « + » d’un post-it, la partie commence avant lui et reprend la suite de sa partie ; depuis « Nouvelle section » en fin de grille, elle s’ajoute, vide, à la fin.
   - **Toujours regroupées** : les sections d’une partie se suivent et la numérotation suit la grille. Un post-it glissé arrive dans la partie du post-it au bord duquel la ligne rouge est dessinée (à la frontière de deux parties, c’est le côté de la ligne qui décide) ; posé sur un bandeau, il se met en tête de cette partie. Changer la partie d’une section dans son panneau « … » l’envoie au bout le plus proche de sa nouvelle partie.
+  - Le « + » entre deux post-its crée la section dans la partie du post-it à côté duquel il se trouve. Entre deux parties côte à côte, il y en a deux : celui du haut (après le post-it de gauche, dans sa partie), celui du bas (avant le post-it de droite, dans la sienne).
   - Un plan dont les parties sont mélangées (modifié ailleurs, ou à la main) affiche un avertissement qui dit ce qui bougerait, et un bouton **Regrouper**, annulable.
 - **Page blanche** voulue (avant une ouverture de partie, par exemple) : « Page blanche » dans la création. Elle se déplace et se dimensionne comme un post-it, n’a ni texte ni statut, et figure dans la compilation sous la forme `<!-- PAGE BLANCHE (p. 2) -->`.
 - **Vue** (en haut) : sur ordinateur, Compact, Normal, Détaillé ou Lecture ; sur tablette et téléphone, Plan ou Lecture.

@@ -11,6 +11,7 @@ import {
 } from '../../domaine/operations'
 import { paginer, type Pagination } from '../../domaine/pagination'
 import {
+  commencerPartieA,
   deplacerPartie,
   estRegroupe,
   finDePartie,
@@ -374,6 +375,12 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
           deplacerPartie={(id, index) => {
             atelier.modifierPlan((p) => deplacerPartie(p, id, index), `déplacement de la partie ${titrePartie(id)}`)
           }}
+          commencerPartie={(id, section) => {
+            atelier.modifierPlan(
+              (p) => commencerPartieA(p, id, section),
+              `la partie ${titrePartie(id)} commence à ${titre(section)}`,
+            )
+          }}
           ouvrir={(id) => {
             // Une section de texte s'ouvre dans l'éditeur ; un hors-texte, dans son panneau.
             const s = plan.sections.find((x) => x.id === id)
@@ -389,8 +396,7 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
             const n = Math.max(1, s.pages + delta)
             atelier.modifierPlan((p) => changerPages(p, id, delta), `${s.titre} sur ${n} page${n > 1 ? 's' : ''}`)
           }}
-          creer={(index) => {
-            const partie = plan.sections[index]?.partie ?? plan.parties.at(-1)?.id ?? ''
+          creer={(index, partie) => {
             setPanneau({ type: 'creation', index, partie, placePartie: index < plan.sections.length ? 'ici' : 'fin' })
           }}
           deplacer={(id, index, partie) => {

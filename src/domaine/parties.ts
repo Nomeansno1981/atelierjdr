@@ -134,6 +134,45 @@ export function deplacerPartie(plan: Plan, id: string, index: number): Plan {
   return rangerParPartie({ ...plan, parties })
 }
 
+/**
+ * Fait commencer une partie à une section : son bandeau, glissé sur un
+ * post-it, s'y pose.
+ * - Section d'une autre partie, au milieu de celle-ci : la partie vient
+ *   juste après elle et reprend cette section et les suivantes de cette
+ *   partie (ses propres sections la suivent).
+ * - Première section d'une autre partie : la partie se place avant elle,
+ *   entière.
+ * - Section de la partie elle-même : son début recule jusqu'à cette
+ *   section ; celles d'avant passent dans la partie précédente.
+ */
+export function commencerPartieA(plan: Plan, id: string, idSection: string): Plan {
+  const partie = plan.parties.find((p) => p.id === id)
+  const index = plan.sections.findIndex((s) => s.id === idSection)
+  const section = plan.sections[index]
+  if (!partie || !section) return plan
+  const premiere = plan.sections.findIndex((s) => s.partie === section.partie)
+
+  if (section.partie === id) {
+    const precedente = plan.parties[plan.parties.findIndex((p) => p.id === id) - 1]
+    if (!precedente || premiere === index) return plan
+    return rangerParPartie({
+      ...plan,
+      sections: plan.sections.map((s, i) => (i >= premiere && i < index ? { ...s, partie: precedente.id } : s)),
+    })
+  }
+
+  const autres = plan.parties.filter((p) => p.id !== id)
+  const rang = autres.findIndex((p) => p.id === section.partie)
+  if (premiere === index) return deplacerPartie(plan, id, rang)
+  let fin = index
+  while (plan.sections[fin]?.partie === section.partie) fin++
+  return rangerParPartie({
+    ...plan,
+    parties: [...autres.slice(0, rang + 1), partie, ...autres.slice(rang + 1)],
+    sections: plan.sections.map((s, i) => (i >= index && i < fin ? { ...s, partie: id } : s)),
+  })
+}
+
 export interface NouvellePartie {
   titre: string
   numerotee: boolean

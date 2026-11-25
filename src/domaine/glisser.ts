@@ -110,15 +110,24 @@ export function cibleInsertion(
   return enFin()
 }
 
+/** Ce que fait une partie glissée : se déplacer entière, ou commencer à une section. */
+export type ActionPartie =
+  /** Index d'arrivée dans la liste des parties, compté sans elle. */
+  | { type: 'bloc'; index: number }
+  | { type: 'debut'; section: string }
+
 export interface CiblePartie {
-  /** Index d'arrivée dans la liste des parties, compté sans la partie glissée. */
-  index: number
-  /** Partie voisine à l'arrivée, pour l'annoncer ; null si rien ne change. */
-  voisine: { id: string; cote: 'avant' | 'apres' } | null
+  /** null : rien ne change. */
+  action: ActionPartie | null
   repere: Repere | null
 }
 
-/** Où tombe une partie glissée : avant ou après une autre partie, entière. */
+/**
+ * Où tombe une partie glissée. Son bandeau marque son début : posé sur un
+ * post-it, il fait commencer la partie à ce post-it (voir
+ * `commencerPartieA`) ; posé sur le bandeau d'une autre partie, il la place
+ * entière avant elle ; en fin de grille, après toutes les autres.
+ */
 export function ciblePartie(
   ordre: readonly SectionPlacee[],
   parties: readonly { id: string }[],
@@ -128,26 +137,29 @@ export function ciblePartie(
 ): CiblePartie {
   const autres = parties.filter((p) => p.id !== idPartie)
   const depart = parties.findIndex((p) => p.id === idPartie)
-  const immobile: CiblePartie = { index: depart, voisine: null, repere: null }
-  const sections = (id: string) => ordre.filter((s) => s.partie === id)
+  const rien: CiblePartie = { action: null, repere: null }
+  const bloc = (index: number, repere: Repere | null): CiblePartie =>
+    index === depart ? rien : { action: { type: 'bloc', index }, repere }
 
-  function vers(id: string, cote: 'avant' | 'apres'): CiblePartie {
-    if (id === idPartie) return immobile
-    const index = autres.findIndex((p) => p.id === id) + (cote === 'apres' ? 1 : 0)
-    if (index === depart) return immobile
-    const siennes = sections(id)
-    const bord = cote === 'avant' ? siennes[0] : siennes.at(-1)
-    const repere: Repere = bord ? { type: 'postit', id: bord.id, cote } : { type: 'partie', id }
-    return { index, voisine: { id, cote }, repere }
+  const enFin = () => {
+    const derniere = [...ordre].reverse().find((s) => s.partie !== idPartie)
+    const partieFinale = autres.at(-1)
+    return bloc(
+      autres.length,
+      derniere ? { type: 'postit', id: derniere.id, cote: 'apres' } : partieFinale ? { type: 'partie', id: partieFinale.id } : null,
+    )
   }
 
-  if (position.type === 'fin') {
-    const derniere = autres.at(-1)
-    return derniere ? vers(derniere.id, 'apres') : immobile
+  if (position.type === 'fin') return enFin()
+  if (position.type === 'partie') {
+    if (position.partie === idPartie) return rien
+    return bloc(
+      autres.findIndex((p) => p.id === position.partie),
+      { type: 'partie', id: position.partie },
+    )
   }
-  if (position.type === 'partie') return vers(position.partie, 'avant')
 
-  const { page, fraction } = position
+  const { page } = position
   const section =
     ordre.find((s) => {
       const e = pagination.emplacements.get(s.id)
@@ -157,13 +169,19 @@ export function ciblePartie(
     (pagination.blanches.includes(page)
       ? ordre.find((s) => (pagination.emplacements.get(s.id)?.premiere ?? 0) > page)
       : undefined)
-  if (!section) {
-    const derniere = autres.at(-1)
-    return derniere ? vers(derniere.id, 'apres') : immobile
+  if (!section) return enFin()
+
+  const repere: Repere = { type: 'postit', id: section.id, cote: 'avant' }
+  const premiere = ordre.find((s) => s.partie === section.partie)
+  if (section.partie === idPartie) {
+    // Le début recule dans la partie elle-même : il faut une partie avant elle.
+    return premiere?.id === section.id || depart <= 0 ? rien : { action: { type: 'debut', section: section.id }, repere }
   }
-  // Première ou seconde moitié de toute la partie survolée.
-  const siennes = sections(section.partie)
-  const debut = pagination.emplacements.get(siennes[0]?.id ?? '')?.premiere ?? page
-  const fin = pagination.emplacements.get(siennes.at(-1)?.id ?? '')?.derniere ?? page
-  return vers(section.partie, page + fraction < (debut + fin + 1) / 2 ? 'avant' : 'apres')
+  if (premiere?.id === section.id) {
+    return bloc(
+      autres.findIndex((p) => p.id === section.partie),
+      repere,
+    )
+  }
+  return { action: { type: 'debut', section: section.id }, repere }
 }
