@@ -151,7 +151,7 @@ export function PanneauLivres({ atelier, etat, fermer }: Proprietes) {
                     vos jetons
                   </a>
                   , ouvrez-le, modifiez son accès aux dépôts (« Repository access ») pour y ajouter le nouveau, puis
-                  enregistrez.
+                  enregistrez avec le bouton « Update », tout en bas de la page.
                 </li>
                 <li>Saisissez son nom ci-dessus : l’Atelier y crée le manuscrit.</li>
               </ol>

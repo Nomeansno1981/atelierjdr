@@ -70,7 +70,7 @@ Le titre du livre, en haut du plan, ouvre la liste des **livres** de l’apparei
 - **Ajouter un livre** dont le dépôt existe déjà : saisissez son nom (`VOTRE-NOM/autre-livre`), puis **Ajouter**.
 - **Commencer un nouveau livre** :
   1. créez un dépôt **privé** sur GitHub (vide, sans README) ;
-  2. ajoutez-le au jeton de l’Atelier, sans en créer un autre : **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens**, ouvrez le jeton, modifiez **Repository access** pour y ajouter le dépôt, puis enregistrez ;
+  2. ajoutez-le au jeton de l’Atelier, sans en créer un autre : **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens**, ouvrez le jeton, modifiez **Repository access** (en restant sur **Only select repositories**) pour y ajouter le dépôt, puis enregistrez avec **Update**, tout en bas de la page. Évitez **All repositories** : le jeton pourrait alors modifier tous vos dépôts, y compris celui du site ;
   3. dans l’Atelier, **Ajouter** ce dépôt : un formulaire demande le titre, le nombre de pages, les mots par page et les parties, puis crée `plan.json`. Les règles typographiques sont reprises du livre ouvert, et le nom des compilations est tiré du titre (`Les_Ombres__v{n}.md`, modifiable dans les Réglages).
 - **Retirer** un livre efface sa copie sur l’appareil (le dépôt GitHub n’est pas touché). Le livre ouvert ne se retire pas.
 - **Se déconnecter** (Réglages) efface le jeton et la copie de tous les livres de l’appareil.

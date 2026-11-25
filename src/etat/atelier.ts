@@ -338,7 +338,7 @@ export class Atelier {
       if (e instanceof ErreurGitHub && e.nature === 'introuvable') {
         return {
           etat: 'erreur',
-          message: `Dépôt ${nomComplet(depot)} introuvable : vérifiez son nom, et que votre jeton y donne accès (sur GitHub, ajoutez ce dépôt à ceux du jeton).`,
+          message: `Dépôt ${nomComplet(depot)} introuvable : vérifiez son nom, et que votre jeton y donne accès (sur GitHub, ajoutez ce dépôt à ceux du jeton). Si vous venez de le faire, vérifiez que la modification est enregistrée (bouton « Update » en bas de la page du jeton), puis réessayez dans une minute.`,
         }
       }
       return { etat: 'erreur', message: messageErreur(e) }
