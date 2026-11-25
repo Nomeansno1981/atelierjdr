@@ -8,6 +8,8 @@ interface Proprietes {
   plan: Plan
   /** Partie où la section sera créée : celle de la place choisie. */
   partie: string
+  /** Entre deux parties : celle de droite, au choix (la section irait à son début). */
+  autrePartie?: string | undefined
   /**
    * Où une nouvelle partie commencerait : avant une section, ou en fin de
    * livre. null : on ne propose pas de partie (depuis une partie vide).
@@ -20,13 +22,14 @@ interface Proprietes {
 
 type Type = NouvelleSection['type'] | 'partie'
 
-export function PanneauCreation({ plan, partie, placePartie, creer, creerPartie, fermer }: Proprietes) {
+export function PanneauCreation({ plan, partie, autrePartie, placePartie, creer, creerPartie, fermer }: Proprietes) {
   const [type, setType] = useState<Type>('texte')
+  const [partieChoisie, setPartieChoisie] = useState(partie)
   const [titre, setTitre] = useState('')
   const [pages, setPages] = useState('1')
   const [numerotee, setNumerotee] = useState(true)
   const id = useId()
-  const nomPartie = plan.parties.find((p) => p.id === partie)?.titre ?? partie
+  const nom = (id: string) => plan.parties.find((p) => p.id === id)?.titre ?? id
 
   function envoyer(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -36,7 +39,7 @@ export function PanneauCreation({ plan, partie, placePartie, creer, creerPartie,
       return
     }
     if (titre.trim() === '' && type !== 'blanche') return
-    creer({ type, titre, partie, pages: Math.max(1, Number.parseInt(pages, 10) || 1) })
+    creer({ type, titre, partie: partieChoisie, pages: Math.max(1, Number.parseInt(pages, 10) || 1) })
   }
 
   const choix = (valeur: Type, libelle: string, aide?: string) => (
@@ -90,7 +93,23 @@ export function PanneauCreation({ plan, partie, placePartie, creer, creerPartie,
               onChange={(e) => { setPages(e.target.value) }}
               required
             />
-            <p className="aide">Dans la partie « {nomPartie} ».</p>
+            {autrePartie ? (
+              <>
+                <label htmlFor={`${id}-partie`}>Partie</label>
+                <select
+                  id={`${id}-partie`}
+                  value={partieChoisie}
+                  onChange={(e) => {
+                    setPartieChoisie(e.target.value)
+                  }}
+                >
+                  <option value={partie}>À la fin de « {nom(partie)} »</option>
+                  <option value={autrePartie}>Au début de « {nom(autrePartie)} »</option>
+                </select>
+              </>
+            ) : (
+              <p className="aide">Dans la partie « {nom(partie)} ».</p>
+            )}
           </>
         )}
 

@@ -32,7 +32,7 @@ interface Proprietes {
   /** Ligne d'insertion du post-it glissé, à ce bord-ci. */
   insertion?: 'avant' | 'apres' | undefined
   /** « + » au bord gauche (nouvelle section avant) et au bord droit (après). */
-  inserer?: { avant: boolean; apres: boolean; avantDecale: boolean; apresDecale: boolean }
+  inserer?: { avant: boolean; apres: boolean }
   actions: ActionsPostIt
 }
 
@@ -48,7 +48,7 @@ export function PostIt({
   place,
   source = false,
   insertion,
-  inserer = { avant: false, apres: false, avantDecale: false, apresDecale: false },
+  inserer = { avant: false, apres: false },
   actions,
 }: Proprietes) {
   // Seul le premier segment se saisit : il porte l'identifiant de la section.
@@ -170,7 +170,7 @@ export function PostIt({
       {inserer.avant && (
         <button
           type="button"
-          className={`postit-inserer${inserer.avantDecale ? ' postit-inserer-bas' : ''}`}
+          className="postit-inserer"
           aria-label={`Nouvelle section avant ${section.titre}`}
           title="Nouvelle section ici"
           {...sansGlisser}
@@ -184,7 +184,7 @@ export function PostIt({
       {inserer.apres && (
         <button
           type="button"
-          className={`postit-inserer postit-inserer-apres${inserer.apresDecale ? ' postit-inserer-haut' : ''}`}
+          className="postit-inserer postit-inserer-apres"
           aria-label={`Nouvelle section après ${section.titre}`}
           title="Nouvelle section ici"
           {...sansGlisser}

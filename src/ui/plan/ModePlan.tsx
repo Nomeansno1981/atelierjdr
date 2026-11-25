@@ -52,7 +52,7 @@ type Panneau =
   | { type: 'recherche' }
   | { type: 'compilation' }
   /** placePartie : où commencerait une nouvelle partie (null : on n'en propose pas). */
-  | { type: 'creation'; index: number; partie: string; placePartie: 'ici' | 'fin' | null }
+  | { type: 'creation'; index: number; partie: string; autrePartie?: string; placePartie: 'ici' | 'fin' | null }
   | { type: 'partie'; id: string }
   | { type: 'corbeille' }
   | { type: 'reglages' }
@@ -396,8 +396,14 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
             const n = Math.max(1, s.pages + delta)
             atelier.modifierPlan((p) => changerPages(p, id, delta), `${s.titre} sur ${n} page${n > 1 ? 's' : ''}`)
           }}
-          creer={(index, partie) => {
-            setPanneau({ type: 'creation', index, partie, placePartie: index < plan.sections.length ? 'ici' : 'fin' })
+          creer={(index, partie, autrePartie) => {
+            setPanneau({
+              type: 'creation',
+              index,
+              partie,
+              ...(autrePartie ? { autrePartie } : {}),
+              placePartie: index < plan.sections.length ? 'ici' : 'fin',
+            })
           }}
           deplacer={(id, index, partie) => {
             const avant = plan.sections.find((x) => x.id === id)?.partie
@@ -478,6 +484,7 @@ export function ModePlan({ atelier, etat, plan, naviguer }: Proprietes) {
         <PanneauCreation
           plan={plan}
           partie={panneau.partie}
+          autrePartie={panneau.autrePartie}
           placePartie={panneau.placePartie}
           creerPartie={(nouvelle) => {
             const propre = { ...nouvelle, titre: typo(nouvelle.titre) }

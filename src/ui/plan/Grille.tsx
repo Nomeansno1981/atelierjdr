@@ -28,8 +28,11 @@ export interface ProprietesGrille {
   ouvrir: (id: string) => void
   modifier: (id: string) => void
   changerPages: (id: string, delta: number) => void
-  /** Nouvelle section à cet index de l'ordre, dans cette partie. */
-  creer: (index: number, partie: string) => void
+  /**
+   * Nouvelle section à cet index de l'ordre, dans cette partie. Entre deux
+   * parties, `autrePartie` est celle de droite : on choisira.
+   */
+  creer: (index: number, partie: string, autrePartie?: string) => void
   /** Nouvelle section dans une partie vide. */
   creerDansPartie: (partie: string) => void
   /** Déplace une section ; `partie` : partie d'arrivée, si on la connaît. */
@@ -267,7 +270,9 @@ export function Grille(props: ProprietesGrille) {
     },
     creerApres: (id) => {
       const index = plan.sections.findIndex((s) => s.id === id)
-      creer(index + 1, plan.sections[index]?.partie ?? '')
+      const partie = plan.sections[index]?.partie ?? ''
+      const suivante = plan.sections[index + 1]?.partie
+      creer(index + 1, partie, suivante !== undefined && suivante !== partie ? suivante : undefined)
     },
     touche,
   }
@@ -278,9 +283,7 @@ export function Grille(props: ProprietesGrille) {
     creerDans: props.creerDansPartie,
   }
   const contexte: ContexteGrille = {
-    plancheDe: (n: number) => (plan.livre.premierePage === 'droite' ? Math.floor(n / 2) : Math.floor((n - 1) / 2)),
-    precedentes: new Map(ordre.map((s, i) => [s.id, ordre[i - 1]])),
-    suivantes: new Map(ordre.map((s, i) => [s.id, ordre[i + 1]])),
+    premiere: ordre[0]?.id,
     pagination,
     sections,
     etiquettes,
@@ -365,11 +368,8 @@ export function Grille(props: ProprietesGrille) {
 }
 
 interface ContexteGrille {
-  /** Index de la planche (double page) d'une page. */
-  plancheDe: (page: number) => number
-  /** Section qui précède chacune dans la grille. */
-  precedentes: ReadonlyMap<string, Section | undefined>
-  suivantes: ReadonlyMap<string, Section | undefined>
+  /** Première section de la grille : la seule à avoir un « + » à sa gauche. */
+  premiere: string | undefined
   pagination: Pagination
   sections: ReadonlyMap<string, Section>
   etiquettes: ReadonlyMap<string, string>
@@ -384,34 +384,16 @@ interface ContexteGrille {
 }
 
 function VuePlanche({ planche, contexte }: { planche: Planche; contexte: ContexteGrille }) {
-  const { pagination, sections, etiquettes, mots, glisse, actions, vides, parties, precedentes, suivantes, plancheDe } =
-    contexte
+  const { pagination, sections, etiquettes, mots, glisse, actions, vides, parties, premiere } = contexte
 
   /**
-   * « + » au bord droit de chaque post-it (après lui) ; au bord gauche
-   * seulement là où aucun « + » ne s'y trouve déjà : en tête de grille, en
-   * début de double page, après une page blanche, ou au début d'une partie
-   * (la section créée y prend alors la partie du post-it de droite).
+   * Un seul « + » entre deux post-its : au bord droit de chacun (après lui),
+   * plus un au bord gauche du tout premier de la grille.
    */
-  function boutonsInserer(section: Section, premiere: boolean, derniere: boolean) {
-    /** Deux sections côte à côte, sur la même double page. */
-    const cote = (a: Section | undefined, b: Section | undefined) => {
-      const ea = a && pagination.emplacements.get(a.id)
-      const eb = b && pagination.emplacements.get(b.id)
-      return ea !== undefined && eb !== undefined && ea.derniere + 1 === eb.premiere && plancheDe(ea.derniere) === plancheDe(eb.premiere)
-    }
-    const avantMoi = precedentes.get(section.id)
-    const apresMoi = suivantes.get(section.id)
-    const colleAvant = cote(avantMoi, section)
-    const colleApres = cote(section, apresMoi)
-    return {
-      avant: premiere && !(colleAvant && avantMoi?.partie === section.partie),
-      apres: derniere,
-      // Entre deux parties côte à côte, les deux « + » se partagent l'espace : l'un en haut, l'autre en bas.
-      avantDecale: colleAvant && avantMoi?.partie !== section.partie,
-      apresDecale: colleApres && apresMoi?.partie !== section.partie,
-    }
-  }
+  const boutonsInserer = (section: Section, debut: boolean, fin: boolean) => ({
+    avant: debut && section.id === premiere,
+    apres: fin,
+  })
   const pages = [planche.gauche, planche.droite].filter((p): p is PageGrille => p !== null)
   const auPointeur = glisse?.mode === 'pointeur'
   const repere = auPointeur ? glisse.repere : null

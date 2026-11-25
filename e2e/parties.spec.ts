@@ -100,7 +100,7 @@ test('pendant le glissement d’une partie, rien ne bouge et la silhouette annon
 
 test('« Nouvelle partie ici » coupe la partie : la suite passe dans la nouvelle', async ({ page }) => {
   const { faux } = await ouvrir(page)
-  await page.getByRole('button', { name: 'Nouvelle section avant Les serments' }).click()
+  await page.getByRole('button', { name: 'Nouvelle section après Illustration : la chute' }).click()
   const dialogue = page.getByRole('dialog', { name: 'Nouvelle section' })
   await dialogue.getByRole('radio', { name: /^Partie/ }).check()
   await page.getByRole('dialog', { name: 'Nouvelle partie' }).getByLabel('Titre de la partie').fill('Le combat')
@@ -210,4 +210,21 @@ test('les réglages ne listent plus les parties', async ({ page }) => {
   const reglages = page.getByRole('dialog', { name: 'Réglages du livre' })
   await expect(reglages).toContainText('Les parties se créent, se renomment et se déplacent directement dans la grille')
   await expect(reglages.getByRole('button', { name: 'Ajouter une partie' })).toHaveCount(0)
+})
+
+test('le « + » entre deux parties : on choisit la fin de l’une ou le début de l’autre', async ({ page }) => {
+  await ouvrir(page)
+  await page.getByRole('button', { name: 'Nouvelle section après Qu’est-ce que Katastrophê ?' }).click()
+  const dialogue = page.getByRole('dialog', { name: 'Nouvelle section' })
+  const partie = dialogue.getByLabel('Partie', { exact: true })
+  await expect(partie.locator('option')).toHaveText(['À la fin de « Présentation »', 'Au début de « Les règles »'])
+  await partie.selectOption({ label: 'Au début de « Les règles »' })
+  await dialogue.getByRole('textbox', { name: 'Titre' }).fill('Les dés')
+  await dialogue.getByRole('button', { name: 'Créer' }).click()
+  await expect(titres(page).nth(3)).toHaveText('Les dés')
+  await expect(postit(page, 'Les dés').locator('.postit-partie')).toHaveText('II. Les règles')
+
+  // Au milieu d'une partie, pas de choix.
+  await page.getByRole('button', { name: 'Nouvelle section après Avant-propos' }).click()
+  await expect(page.getByRole('dialog', { name: 'Nouvelle section' })).toContainText('Dans la partie « Présentation ».')
 })

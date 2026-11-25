@@ -553,15 +553,6 @@
   transform: translate(50%, -50%);
 }
 
-/* Entre deux parties côte à côte : « après » en haut, « avant » en bas. */
-.postit-inserer-haut {
-  top: 32%;
-}
-
-.postit-inserer-bas {
-  top: 68%;
-}
-
 .postit:hover .postit-inserer,
 .postit-inserer:focus-visible {
   opacity: 1;

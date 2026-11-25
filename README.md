@@ -86,7 +86,7 @@ Le plan est un chemin de fer : chaque section est un post-it qui couvre autant d
 | Déplacer une section | Glisser le post-it | Appui long (un tiers de seconde), puis glisser | Espace, flèches, puis Espace ou Entrée (Échap annule) |
 | Modifier | Bouton « … » | Bouton « … » | Tab jusqu’au bouton, Entrée |
 | Changer le nombre de pages | Boutons − et + | Boutons − et + | |
-| Créer une section, un hors-texte, une page blanche ou une partie | « + » entre deux post-its (au bord droit d’un post-it : après lui ; au bord gauche : avant lui) ou « Nouvelle section » en fin de grille | idem | |
+| Créer une section, un hors-texte, une page blanche ou une partie | « + » entre deux post-its (un seul par intervalle, au bord droit du post-it de gauche ; un autre devant le premier) ou « Nouvelle section » en fin de grille | idem | |
 | Déplacer une partie entière | Glisser son bandeau | Appui long sur son bandeau, puis glisser | Bandeau, Entrée, puis « Placer avant / après » |
 | Annuler, rétablir | Boutons en haut à gauche | idem | Cmd/Ctrl+Z, Cmd/Ctrl+Maj+Z |
 
@@ -99,7 +99,7 @@ Le plan est un chemin de fer : chaque section est un post-it qui couvre autant d
     - Posé sur le premier post-it d’une autre partie, sur son bandeau, ou en fin de grille, la partie se déplace **entière**, avec ses sections, avant cette partie (ou à la fin).
   - **Nouvelle partie** : choisissez « Partie » dans la création. Depuis le « + » d’un post-it, la partie commence avant lui et reprend la suite de sa partie ; depuis « Nouvelle section » en fin de grille, elle s’ajoute, vide, à la fin.
   - **Toujours regroupées** : les sections d’une partie se suivent et la numérotation suit la grille. Un post-it glissé arrive dans la partie du post-it au bord duquel la ligne rouge est dessinée (à la frontière de deux parties, c’est le côté de la ligne qui décide) ; posé sur un bandeau, il se met en tête de cette partie. Changer la partie d’une section dans son panneau « … » l’envoie au bout le plus proche de sa nouvelle partie.
-  - Le « + » entre deux post-its crée la section dans la partie du post-it à côté duquel il se trouve. Entre deux parties côte à côte, il y en a deux : celui du haut (après le post-it de gauche, dans sa partie), celui du bas (avant le post-it de droite, dans la sienne).
+  - Le « + » entre deux post-its crée la section dans leur partie. Entre deux parties, la fenêtre de création demande où la mettre : à la fin de la partie de gauche, ou au début de celle de droite.
   - Un plan dont les parties sont mélangées (modifié ailleurs, ou à la main) affiche un avertissement qui dit ce qui bougerait, et un bouton **Regrouper**, annulable.
 - **Page blanche** voulue (avant une ouverture de partie, par exemple) : « Page blanche » dans la création. Elle se déplace et se dimensionne comme un post-it, n’a ni texte ni statut, et figure dans la compilation sous la forme `<!-- PAGE BLANCHE (p. 2) -->`.
 - **Vue** (en haut) : sur ordinateur, Compact, Normal, Détaillé ou Lecture ; sur tablette et téléphone, Plan ou Lecture.

@@ -34,7 +34,7 @@ test('une section déplacée chez une autre partie en prend la partie : pas de I
 
 test('poser une page blanche à la main', async ({ page }) => {
   const { faux, erreurs } = await ouvrir(page)
-  await page.getByRole('button', { name: 'Nouvelle section avant Avant-propos' }).click()
+  await page.getByRole('button', { name: 'Nouvelle section après Page de titre' }).click()
   const dialogue = page.getByRole('dialog', { name: 'Nouvelle section' })
   await dialogue.getByLabel('Page blanche').check()
   await dialogue.getByRole('button', { name: 'Créer', exact: true }).click()
