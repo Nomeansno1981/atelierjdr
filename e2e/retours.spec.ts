@@ -44,7 +44,7 @@ test('poser une page blanche à la main', async ({ page }) => {
   await expect(blanche.locator('.postit-titre')).toHaveText('Page blanche')
   await expect(page.locator('.page[data-page="2"]').locator('..').locator('.postit-blanche')).toHaveCount(1)
   // Tout se décale d'une page, blanches automatiques comprises : 21 pages au lieu de 19.
-  await expect(page.locator('.barre-etat')).toContainText('Pages 21 / 20')
+  await expect(page.locator('.barre-etat')).toContainText('Pages 21')
   // Les statuts ne comptent pas la page blanche : toujours 10 sections réparties.
   await expect(page.locator('.compte-statut')).toHaveText(['À écrire : 2', 'Premier jet : 4', 'Relu : 3', 'Définitif : 1'])
 

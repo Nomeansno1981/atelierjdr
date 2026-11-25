@@ -17,7 +17,7 @@ Chaque autre livre a son propre dépôt privé, sur le même modèle (voir « Pl
 
 1. Sur GitHub, cliquez sur **+** en haut à droite, puis **New repository**.
 2. Nom : `katastrophe`. Visibilité : **Private**.
-3. Cliquez sur **Create repository**. Le dépôt peut rester vide : à la première connexion, l’Atelier propose d’y créer le manuscrit (titre, nombre de pages, mots par page, parties).
+3. Cliquez sur **Create repository**. Le dépôt peut rester vide : à la première connexion, l’Atelier propose d’y créer le manuscrit (titre, mots par page, parties).
 
 Pour essayer plutôt l’Atelier avec le manuscrit d’exemple, cochez **Add a README file** à la création, puis copiez-y le contenu du dossier `exemple/` de ce dépôt (le fichier `plan.json` et le dossier `sections/`), soit :
 
@@ -71,7 +71,7 @@ Le titre du livre, en haut du plan, ouvre la liste des **livres** de l’apparei
 - **Commencer un nouveau livre** :
   1. créez un dépôt **privé** sur GitHub (vide, sans README) ;
   2. ajoutez-le au jeton de l’Atelier, sans en créer un autre : **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens**, ouvrez le jeton, modifiez **Repository access** (en restant sur **Only select repositories**) pour y ajouter le dépôt, puis enregistrez avec **Update**, tout en bas de la page. Évitez **All repositories** : le jeton pourrait alors modifier tous vos dépôts, y compris celui du site ;
-  3. dans l’Atelier, **Ajouter** ce dépôt : un formulaire demande le titre, le nombre de pages, les mots par page et les parties, puis crée `plan.json`. Les règles typographiques sont reprises du livre ouvert, et le nom des compilations est tiré du titre (`Les_Ombres__v{n}.md`, modifiable dans les Réglages).
+  3. dans l’Atelier, **Ajouter** ce dépôt : un formulaire demande le titre, les mots par page et les parties, puis crée `plan.json`. Les règles typographiques sont reprises du livre ouvert, et le nom des compilations est tiré du titre (`Les_Ombres__v{n}.md`, modifiable dans les Réglages).
 - **Retirer** un livre efface sa copie sur l’appareil (le dépôt GitHub n’est pas touché). Le livre ouvert ne se retire pas.
 - **Se déconnecter** (Réglages) efface le jeton et la copie de tous les livres de l’appareil.
 
@@ -79,13 +79,13 @@ Chaque livre a son dépôt, son historique et ses compilations : on peut en part
 
 ## Utiliser le plan
 
-Le plan est un chemin de fer : chaque section est un post-it qui couvre autant de pages que son budget. On choisit l’**ordre** des sections ; les pages se calculent, pages blanches comprises (une section qui doit commencer à gauche ou à droite en insère une si nécessaire).
+Le plan est un chemin de fer : chaque section est un post-it qui couvre autant de pages que son budget. On choisit l’**ordre** des sections ; les pages se calculent, pages blanches comprises (une section qui doit commencer à gauche ou à droite en insère une si nécessaire). Le livre n’a pas de nombre de pages fixé à l’avance : il compte celles qu’occupent ses sections, et grandit ou rétrécit avec elles. Quand ce total n’est pas un multiple de 4, la barre du haut indique combien de pages compterait l’impression.
 
 | Action | Souris | Doigt | Clavier |
 | --- | --- | --- | --- |
 | Déplacer une section | Glisser le post-it | Appui long (un tiers de seconde), puis glisser | Espace, flèches, puis Espace ou Entrée (Échap annule) |
 | Modifier | Bouton « … » | Bouton « … » | Tab jusqu’au bouton, Entrée |
-| Changer le nombre de pages | Boutons − et + | Boutons − et + | |
+| Changer le nombre de pages d’une section | Boutons − et + | Boutons − et + | |
 | Créer une section, un hors-texte, une page blanche ou une partie | « + » entre deux post-its (un seul par intervalle, au bord droit du post-it de gauche ; un autre devant le premier) ou « Nouvelle section » en fin de grille | idem | |
 | Déplacer une partie entière | Glisser son bandeau | Appui long sur son bandeau, puis glisser | Bandeau, Entrée, puis « Placer avant / après » |
 | Annuler, rétablir | Boutons en haut à gauche | idem | Cmd/Ctrl+Z, Cmd/Ctrl+Maj+Z |
@@ -106,8 +106,8 @@ Le plan est un chemin de fer : chaque section est un post-it qui couvre autant d
 - **Supprimer** se fait depuis le panneau « … » : la section part dans la corbeille, et un bandeau « Annuler » reste 10 secondes. La corbeille (icône en haut à droite) permet de restaurer une section à sa place. La vider demande confirmation et ne s’annule pas ; les fichiers restent dans l’historique GitHub.
 - **Couleur** du post-it : son statut (gris à écrire, jaune premier jet, bleu relu, vert définitif). **Étiquette** en haut : sa partie.
 - **Jauge** : mots écrits sur la cible (pages × mots par page) ; elle vire au rouge au-delà de 110 %.
-- **Pages hachurées** : en gris, une page blanche (insérée automatiquement si elle n’a pas d’étiquette, voulue si c’est un post-it « Page blanche ») ; en rouge, une page au-delà du nombre de pages prévu.
-- **Réglages** (icône à curseurs) : titre, nombre de pages, mots par page, typographie, nom des compilations. La déconnexion s’y trouve aussi.
+- **Pages hachurées** : une page blanche (insérée automatiquement si elle n’a pas d’étiquette, voulue si c’est un post-it « Page blanche »).
+- **Réglages** (icône à curseurs) : titre, mots par page, typographie, nom des compilations. La déconnexion s’y trouve aussi.
 - **Enregistrement** : chaque modification est écrite sur l’appareil immédiatement, puis envoyée à GitHub environ 5 secondes après la dernière, en un seul commit. L’indicateur en haut à droite dit où elle en est.
 - **Plusieurs appareils** : si le plan a aussi été modifié sur un autre appareil, les deux versions sont fusionnées automatiquement, section par section et champ par champ. Si le même champ a changé des deux côtés (le statut d’une même section, par exemple), la modification la plus récente l’emporte, et un bandeau détaille ce qui a été remplacé. L’autre version reste dans l’historique GitHub.
 

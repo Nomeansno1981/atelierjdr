@@ -134,9 +134,9 @@ describe('opérations', () => {
   it('garde une partie qui contient encore des sections', () => {
     const plan = exemple()
     const sansRegles = plan.parties.filter((p) => p.id !== 'regles')
-    const modifie = modifierReglages(plan, { titre: 'K', pagesTotal: 48, motsParPage: 300, parties: sansRegles })
+    const modifie = modifierReglages(plan, { titre: 'K', motsParPage: 300, parties: sansRegles })
     expect(modifie.parties.map((p) => p.id)).toContain('regles')
-    expect(modifie.livre).toMatchObject({ titre: 'K', pagesTotal: 48, motsParPage: 300, premierePage: 'droite' })
+    expect(modifie.livre).toMatchObject({ titre: 'K', motsParPage: 300, premierePage: 'droite' })
   })
 
   it('tire un identifiant libre de 6 caractères', () => {
@@ -202,12 +202,11 @@ describe('nouveau livre', () => {
   it('un plan valide : parties dans l’ordre, aucune section, nom des compilations tiré du titre', () => {
     const plan = nouveauPlan({
       titre: ' Les Ombres de l’Été ',
-      pagesTotal: 96,
       motsParPage: 320,
       parties: ['Prologue', '', 'Les règles', 'Les règles'],
     })
     expect(lirePlan(serialiserPlan(plan))).toEqual(plan)
-    expect(plan.livre).toEqual({ titre: 'Les Ombres de l’Été', pagesTotal: 96, motsParPage: 320, premierePage: 'droite' })
+    expect(plan.livre).toEqual({ titre: 'Les Ombres de l’Été', motsParPage: 320, premierePage: 'droite' })
     expect(plan.parties.map((p) => [p.id, p.titre])).toEqual([
       ['prologue', 'Prologue'],
       ['les-regles', 'Les règles'],
@@ -219,11 +218,11 @@ describe('nouveau livre', () => {
 
   it('reprend les règles typographiques qu’on lui donne', () => {
     const typo = { ...reglesTypo(exemple()), espaceFine: true }
-    expect(nouveauPlan({ titre: 'X', pagesTotal: 10, motsParPage: 300, parties: ['A'] }, typo).reglages?.typographie).toEqual(typo)
+    expect(nouveauPlan({ titre: 'X', motsParPage: 300, parties: ['A'] }, typo).reglages?.typographie).toEqual(typo)
   })
 
   it('sans partie saisie, une « Première partie »', () => {
-    const plan = nouveauPlan({ titre: 'X', pagesTotal: 10, motsParPage: 300, parties: ['  '] })
+    const plan = nouveauPlan({ titre: 'X', motsParPage: 300, parties: ['  '] })
     expect(plan.parties).toEqual([{ id: 'partie', titre: 'Première partie', numerotee: true }])
   })
 

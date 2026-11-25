@@ -402,7 +402,7 @@ function VuePlanche({ planche, contexte }: { planche: Planche; contexte: Context
     <div className="planche" data-planche={planche.cle}>
       {pages.map((page) => {
         const colonne = COLONNE[page.cote]
-        const classes = ['page', `page-${page.contenu.type}`, page.depasse ? 'page-depasse' : '']
+        const classes = ['page', `page-${page.contenu.type}`]
         const debut = page.debutPartie === null ? undefined : parties.get(page.debutPartie)
         return (
           <Fragment key={page.numero}>
@@ -422,11 +422,10 @@ function VuePlanche({ planche, contexte }: { planche: Planche; contexte: Context
               className={classes.join(' ')}
               style={{ gridColumn: colonne }}
               data-page={page.numero}
-              data-zone={page.contenu.type === 'libre' ? 'fin' : undefined}
             >
               {page.contenu.type === 'blanche' && <span>blanche</span>}
             </div>
-            <div className={`numero${page.depasse ? ' numero-depasse' : ''}`} style={{ gridColumn: colonne }}>
+            <div className="numero" style={{ gridColumn: colonne }}>
               {page.numero}
             </div>
           </Fragment>

@@ -76,9 +76,10 @@ export function fusionnerPlans(base: Plan, local: Plan, distant: Plan, localPlus
 }
 
 function fusionnerLivre(f: Fusion, b: Livre, l: Livre, d: Livre): Livre {
+  // L'ancien budget de pages n'est plus modifié : on garde celui de GitHub, s'il y en a un.
   return {
     titre: f.valeur(b.titre, l.titre, d.titre, (p, g) => `Titre du livre : ${guillemets(p)} remplacé par ${guillemets(g)}`),
-    pagesTotal: f.valeur(b.pagesTotal, l.pagesTotal, d.pagesTotal, (p, g) => `Nombre de pages : ${p} remplacé par ${g}`),
+    ...(d.pagesTotal === undefined ? {} : { pagesTotal: d.pagesTotal }),
     motsParPage: f.valeur(b.motsParPage, l.motsParPage, d.motsParPage, (p, g) => `Mots par page : ${p} remplacé par ${g}`),
     premierePage: f.valeur(b.premierePage, l.premierePage, d.premierePage),
   }

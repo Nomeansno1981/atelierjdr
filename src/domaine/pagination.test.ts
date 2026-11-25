@@ -65,7 +65,7 @@ describe('paginer', () => {
 describe('construireGrille', () => {
   it('page 1 seule à droite, puis des doubles pages', () => {
     const sections = [s('a', 1), s('b', 2), s('c', 1)]
-    const grille = construireGrille(sections, paginer(sections, 'droite'), { pagesTotal: 4, premierePage: 'droite' })
+    const grille = construireGrille(sections, paginer(sections, 'droite'), { premierePage: 'droite' })
     expect(grille.map((pl) => [pl.gauche?.numero ?? null, pl.droite?.numero ?? null])).toEqual([
       [null, 1],
       [2, 3],
@@ -74,28 +74,38 @@ describe('construireGrille', () => {
   })
 
   it('total pair : la dernière page est seule, à gauche', () => {
-    const grille = construireGrille([], paginer([], 'droite'), { pagesTotal: 6, premierePage: 'droite' })
+    const sections = [s('a', 6)]
+    const grille = construireGrille(sections, paginer(sections, 'droite'), { premierePage: 'droite' })
     expect(grille.at(-1)).toMatchObject({ gauche: { numero: 6 }, droite: null })
+  })
+
+  it('aucun nombre de pages imposé : la grille s’arrête à la dernière section', () => {
+    expect(construireGrille([], paginer([], 'droite'), { premierePage: 'droite' })).toEqual([])
+    const sections = [s('a', 3)]
+    const pages = construireGrille(sections, paginer(sections, 'droite'), { premierePage: 'droite' }).flatMap((pl) =>
+      [pl.gauche, pl.droite].filter((p) => p !== null).map((p) => p.numero),
+    )
+    expect(pages).toEqual([1, 2, 3])
   })
 
   it('coupe un post-it qui déborde d’une double page et marque la suite', () => {
     const sections = [s('a', 1), s('b', 4)]
-    const grille = construireGrille(sections, paginer(sections, 'droite'), { pagesTotal: 6, premierePage: 'droite' })
+    const grille = construireGrille(sections, paginer(sections, 'droite'), { premierePage: 'droite' })
     // b occupe les pages 2 à 5 : planches 2-3 et 4-5.
     expect(grille[1]?.segments).toEqual([{ id: 'b', premiere: 2, derniere: 3, suite: false, continue: true }])
     expect(grille[2]?.segments).toEqual([{ id: 'b', premiere: 4, derniere: 5, suite: true, continue: false }])
   })
 
-  it('montre les blanches, les pages libres et le dépassement', () => {
+  it('montre les pages blanches insérées pour la parité', () => {
     const sections = [s('a', 2), s('b', 2, 'gauche')]
-    const grille = construireGrille(sections, paginer(sections, 'droite'), { pagesTotal: 4, premierePage: 'droite' })
+    const grille = construireGrille(sections, paginer(sections, 'droite'), { premierePage: 'droite' })
     const pages = grille.flatMap((pl) => [pl.gauche, pl.droite]).filter((p) => p !== null)
-    expect(pages.map((p) => [p.numero, p.contenu.type, p.depasse])).toEqual([
-      [1, 'section', false],
-      [2, 'section', false],
-      [3, 'blanche', false],
-      [4, 'section', false],
-      [5, 'section', true],
+    expect(pages.map((p) => [p.numero, p.contenu.type])).toEqual([
+      [1, 'section'],
+      [2, 'section'],
+      [3, 'blanche'],
+      [4, 'section'],
+      [5, 'section'],
     ])
   })
 
@@ -105,7 +115,7 @@ describe('construireGrille', () => {
       { id: 'b', pages: 1, debut: 'indifferent' as const, partie: 'p1' },
       { id: 'c', pages: 1, debut: 'indifferent' as const, partie: 'p2' },
     ]
-    const grille = construireGrille(sections, paginer(sections, 'droite'), { pagesTotal: 3, premierePage: 'droite' })
+    const grille = construireGrille(sections, paginer(sections, 'droite'), { premierePage: 'droite' })
     const debuts = grille.flatMap((pl) => [pl.gauche, pl.droite]).map((p) => p?.debutPartie ?? null)
     expect(debuts).toEqual([null, 'p1', null, 'p2'])
   })

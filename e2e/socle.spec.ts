@@ -22,10 +22,10 @@ test('le chemin de fer du manuscrit d’exemple s’affiche, paginé', async ({ 
   await expect(etat(page)).toHaveText('Synchronisé')
   await expect(titres(page)).toHaveText(TITRES)
 
-  // 20 pages prévues, 19 utilisées, une page blanche en 13.
-  await expect(page.locator('.numero')).toHaveText(Array.from({ length: 20 }, (_, i) => String(i + 1)))
+  // 19 pages, celles qu'occupent les sections, dont une page blanche en 13.
+  await expect(page.locator('.numero')).toHaveText(Array.from({ length: 19 }, (_, i) => String(i + 1)))
   await expect(page.locator('.page-blanche')).toHaveAttribute('data-page', '13')
-  await expect(page.locator('.barre-etat')).toContainText('Pages 19 / 20')
+  await expect(page.locator('.barre-etat')).toContainText('Pages 19')
   await expect(page.locator('.separateur')).toHaveText(['I. Présentation', 'II. Les règles', 'Lexique'])
   await expect(page.getByRole('img', { name: 'Hors-texte' })).toHaveCount(2)
   // Les post-its de plusieurs pages coupés sur deux planches portent « suite ».

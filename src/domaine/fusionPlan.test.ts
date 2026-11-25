@@ -127,11 +127,11 @@ describe('fusionnerPlans', () => {
   })
 
   it('fusionne les réglages du livre champ par champ', () => {
-    const reglages = { titre: 'Katastrophê', pagesTotal: 20, motsParPage: 350, parties: base().parties }
-    const local = modifierReglages(base(), { ...reglages, pagesTotal: 24 })
+    const reglages = { titre: 'Katastrophê', motsParPage: 350, parties: base().parties }
+    const local = modifierReglages(base(), { ...reglages, titre: 'Katastrophê II' })
     const distant = modifierReglages(base(), { ...reglages, motsParPage: 300 })
     const r = fusionner(local, distant)
-    expect(r.plan.livre).toMatchObject({ pagesTotal: 24, motsParPage: 300 })
+    expect(r.plan.livre).toMatchObject({ titre: 'Katastrophê II', motsParPage: 300 })
   })
 
   it('une partie retirée d’un côté revient si une section de l’autre côté y appartient', () => {

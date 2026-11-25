@@ -134,7 +134,7 @@ test.describe('au doigt', () => {
     // Et on remet en ordre.
     await glisserDoigt(page, postit(page, 'Page de titre'), page.locator('.page[data-page="1"]'))
     await expect(titres(page)).toHaveText(TITRES)
-    await expect(page.locator('.barre-etat')).toContainText('Pages 19 / 20')
+    await expect(page.locator('.barre-etat')).toContainText('Pages 19')
 
     await expect(etat(page)).toHaveText('Synchronisé', { timeout: 15_000 })
     expect(ordreSurGitHub(faux)).toEqual(TITRES)
@@ -153,7 +153,7 @@ test.describe('au doigt', () => {
       attendu = ['Page de titre', titre, ...attendu.filter((t) => t !== 'Page de titre' && t !== titre)]
       await expect(titres(page)).toHaveText(attendu)
     }
-    await expect(page.locator('.barre-etat')).toContainText('Pages 19 / 20')
+    await expect(page.locator('.barre-etat')).toContainText('Pages 19')
     await expect(etat(page)).toHaveText('Synchronisé', { timeout: 15_000 })
     expect(ordreSurGitHub(faux).map(normal)).toEqual(attendu)
     expect(erreurs).toEqual([])
@@ -197,7 +197,7 @@ test.describe('au clavier', () => {
     await postit(page, 'Le heurt').getByRole('button', { name: 'Une page de plus pour Le heurt' }).click()
     await expect(postit(page, 'Le heurt').locator('.postit-pages')).toContainText('3 p.')
     // Une page de plus décale tout : deux blanches apparaissent, 21 pages.
-    await expect(page.locator('.barre-etat')).toContainText('Pages 21 / 20')
+    await expect(page.locator('.barre-etat')).toContainText('Pages 21')
     await page.keyboard.press('ControlOrMeta+z')
     await expect(postit(page, 'Le heurt').locator('.postit-pages')).toContainText('2 p.')
     await page.keyboard.press('ControlOrMeta+Shift+z')
@@ -213,9 +213,10 @@ test('créer une section : fichier vide créé sur GitHub', async ({ page }) => 
   await dialogue.getByLabel('Pages', { exact: true }).fill('2')
   await dialogue.getByRole('button', { name: 'Créer', exact: true }).click()
   await expect(titres(page).last()).toHaveText('Les dés')
-  await expect(page.locator('.barre-etat')).toContainText('Pages 21 / 20')
-  await expect(page.locator('.page-depasse')).toHaveCount(1)
-  await expect(page.locator('.etat-depasse')).toBeVisible()
+  // Le livre grandit avec ses sections : 21 pages, aucune limite dépassée.
+  await expect(page.locator('.barre-etat')).toContainText('Pages 21')
+  await expect(page.locator('.page[data-page="21"]')).toBeVisible()
+  await expect(page.locator('.page[data-page="22"]')).toHaveCount(0)
 
   await expect(etat(page)).toHaveText('Synchronisé', { timeout: 15_000 })
   expect(faux.fichiers()['sections/les-des.md']).toBe('')
@@ -308,13 +309,17 @@ test('une modification survit à un rechargement avant l’envoi', async ({ page
   expect(lirePlan(faux.fichiers()['plan.json'] ?? '').sections.at(-1)?.pages).toBe(3)
 })
 
-test('réglages : nombre de pages et avertissement multiple de 4', async ({ page }) => {
+test('pas de nombre de pages imposé : la grille suit les sections, l’impression arrondit à 4', async ({ page }) => {
   await ouvrir(page)
-  await page.getByRole('button', { name: 'Réglages' }).click()
-  await page.getByRole('dialog').getByLabel('Nombre de pages').fill('22')
-  await page.getByRole('button', { name: 'Enregistrer' }).click()
-  await expect(page.locator('.barre-etat')).toContainText('Pages 19 / 22')
-  await expect(page.locator('.alerte-pages')).toHaveText('22 pages : pas un multiple de 4')
+  await expect(page.locator('.barre-etat')).toContainText('Pages 19')
+  await expect(page.locator('.page')).toHaveCount(19)
+  await expect(page.locator('.alerte-pages')).toHaveText('Impression : 20 pages')
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click()
+  await expect(page.getByRole('dialog').getByLabel('Nombre de pages')).toHaveCount(0)
+  await page.getByRole('dialog').getByRole('button', { name: 'Annuler' }).click()
+  await postit(page, 'Lexique').getByRole('button', { name: 'Une page de plus pour Lexique' }).click()
+  await expect(page.locator('.barre-etat')).toContainText('Pages 20')
+  await expect(page.locator('.alerte-pages')).toHaveCount(0)
 })
 
 test.describe('zoom', () => {

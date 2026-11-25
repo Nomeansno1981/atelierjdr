@@ -152,10 +152,6 @@
   color: var(--texte-doux);
 }
 
-.etat-depasse {
-  color: var(--erreur);
-  font-weight: 700;
-}
 
 .statuts {
   display: flex;
@@ -341,10 +337,6 @@
   border-radius: 2px;
 }
 
-.page-libre {
-  background: transparent;
-  border-style: dashed;
-}
 
 .page-blanche {
   display: flex;
@@ -356,10 +348,6 @@
   font-style: italic;
 }
 
-.page-depasse {
-  border-color: var(--erreur);
-  background-image: repeating-linear-gradient(-45deg, transparent 0 6px, var(--hachure-rouge) 6px 9px);
-}
 
 .numero {
   grid-row: 3;
@@ -370,10 +358,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.numero-depasse {
-  color: var(--erreur);
-  font-weight: 700;
-}
 
 .ajout-fin {
   display: inline-flex;

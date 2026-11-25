@@ -58,7 +58,7 @@ describe('Atelier', () => {
     expect(atelier.lire().phase).toBe('connexion')
     if (resultat.etat !== 'a-creer') return
 
-    const livre = { titre: 'Roman', pagesTotal: 120, motsParPage: 300, parties: ['Un', 'Deux'] }
+    const livre = { titre: 'Roman', motsParPage: 300, parties: ['Un', 'Deux'] }
     expect(await atelier.creerLivre('jeton-valide', resultat, livre)).toBeNull()
     expect(faux.messages()).toEqual(['Création du manuscrit : Roman'])
     expect(lirePlan(faux.fichiers()['plan.json'] ?? '')).toEqual(nouveauPlan(livre))
@@ -127,7 +127,7 @@ describe('Atelier', () => {
     const resultat = await atelier.seConnecter('jeton-valide', 'autrice/katastrophe')
     expect(resultat).toMatchObject({ etat: 'a-creer', vide: false })
     if (resultat.etat !== 'a-creer') return
-    const livre = { titre: 'Essai', pagesTotal: 10, motsParPage: 300, parties: ['Seule'] }
+    const livre = { titre: 'Essai', motsParPage: 300, parties: ['Seule'] }
     expect(await atelier.creerLivre('jeton-valide', resultat, livre)).toBeNull()
     expect(Object.keys(faux.fichiers()).sort()).toEqual(['README.md', 'plan.json'])
     await atelier.synchroniser()
@@ -722,7 +722,7 @@ describe('Atelier : plusieurs livres', () => {
     const resultat = await atelier.ajouterLivre('autrice/nouveau')
     expect(resultat).toMatchObject({ etat: 'a-creer', vide: true })
     if (resultat.etat !== 'a-creer') return
-    expect(await atelier.creerLivre(null, resultat, { titre: 'Nouveau', pagesTotal: 50, motsParPage: 280, parties: ['A'] })).toBeNull()
+    expect(await atelier.creerLivre(null, resultat, { titre: 'Nouveau', motsParPage: 280, parties: ['A'] })).toBeNull()
     await atelier.synchroniser()
     expect(titre(atelier)).toBe('Nouveau')
     expect(lirePlan(vide.fichiers()['plan.json'] ?? '').reglages?.typographie).toEqual(typo)

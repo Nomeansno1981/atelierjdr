@@ -24,7 +24,12 @@ export type Cote = 'gauche' | 'droite'
 
 export interface Livre {
   titre: string
-  pagesTotal: number
+  /**
+   * Ancien budget de pages, d'avant le livre « à la demande » : gardé tel
+   * quel s'il figure dans plan.json, mais l'Atelier ne s'en sert plus. Le
+   * nombre de pages est celui que les sections occupent.
+   */
+  pagesTotal?: number
   motsParPage: number
   premierePage: Cote
 }
@@ -201,13 +206,13 @@ function lireLivre(v: Verificateur, brut: unknown): Livre | null {
   const o = v.objet(brut, 'livre')
   if (!o) return null
   const titre = v.chaine(o.titre, 'livre.titre')
-  const pagesTotal = v.entier(o.pagesTotal, 'livre.pagesTotal', 1)
+  const pagesTotal = o.pagesTotal === undefined ? undefined : v.entier(o.pagesTotal, 'livre.pagesTotal', 1)
   const motsParPage = v.entier(o.motsParPage, 'livre.motsParPage', 1)
   const premierePage = v.choix(o.premierePage, 'livre.premierePage', ['gauche', 'droite'] as const)
   if (titre === null || pagesTotal === null || motsParPage === null || premierePage === null) {
     return null
   }
-  return { titre, pagesTotal, motsParPage, premierePage }
+  return { titre, ...(pagesTotal === undefined ? {} : { pagesTotal }), motsParPage, premierePage }
 }
 
 function lireParties(v: Verificateur, brut: unknown): Partie[] {
@@ -357,7 +362,7 @@ export function serialiserPlan(plan: Plan): string {
     version: plan.version,
     livre: {
       titre: plan.livre.titre,
-      pagesTotal: plan.livre.pagesTotal,
+      ...(plan.livre.pagesTotal === undefined ? {} : { pagesTotal: plan.livre.pagesTotal }),
       motsParPage: plan.livre.motsParPage,
       premierePage: plan.livre.premierePage,
     },

@@ -226,7 +226,6 @@ export function viderCorbeille(plan: Plan): Plan {
 
 export interface Reglages {
   titre: string
-  pagesTotal: number
   motsParPage: number
   /** Absent : les parties ne changent pas (elles se gèrent dans la grille). */
   parties?: Partie[]
@@ -246,7 +245,6 @@ export function modifierReglages(plan: Plan, reglages: Reglages): Plan {
   const livre: Livre = {
     ...plan.livre,
     titre: reglages.titre.trim() || plan.livre.titre,
-    pagesTotal: Math.max(1, Math.round(reglages.pagesTotal)),
     motsParPage: Math.max(1, Math.round(reglages.motsParPage)),
   }
   let reglagesLivre = reglages.typographie ? { ...plan.reglages, typographie: reglages.typographie } : plan.reglages
@@ -261,7 +259,6 @@ export { nouvelIdPartie }
 /** Ce que l'on demande pour commencer un livre ; le reste se règle ensuite. */
 export interface NouveauLivre {
   titre: string
-  pagesTotal: number
   motsParPage: number
   /** Titres des parties, dans l'ordre. Au moins une. */
   parties: readonly string[]
@@ -284,7 +281,6 @@ export function nouveauPlan(nouveau: NouveauLivre, typographie: ReglesTypo = REG
     version: 1,
     livre: {
       titre,
-      pagesTotal: Math.max(1, Math.round(nouveau.pagesTotal)),
       motsParPage: Math.max(1, Math.round(nouveau.motsParPage)),
       premierePage: 'droite',
     },

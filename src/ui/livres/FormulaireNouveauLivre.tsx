@@ -13,13 +13,12 @@ interface Proprietes {
 }
 
 /**
- * Premier plan d'un livre : titre, budget de pages, mots par page et
- * parties. Le reste (parties non numérotées, typographie, nom des
+ * Premier plan d'un livre : titre, mots par page et parties. Le nombre
+ * de pages suivra les sections. Le reste (parties non numérotées, typographie, nom des
  * compilations) se règle ensuite dans les Réglages.
  */
 export function FormulaireNouveauLivre({ cible, motsParPage, creer, annuler }: Proprietes) {
   const [titre, setTitre] = useState('')
-  const [pages, setPages] = useState('100')
   const [mots, setMots] = useState(String(motsParPage))
   const [parties, setParties] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
@@ -32,7 +31,6 @@ export function FormulaireNouveauLivre({ cible, motsParPage, creer, annuler }: P
     setErreur(null)
     const probleme = await creer({
       titre,
-      pagesTotal: Number.parseInt(pages, 10) || 1,
       motsParPage: Number.parseInt(mots, 10) || 1,
       parties: parties.split('\n'),
     })
@@ -55,32 +53,16 @@ export function FormulaireNouveauLivre({ cible, motsParPage, creer, annuler }: P
       <label htmlFor={`${id}-titre`}>Titre du livre</label>
       <input id={`${id}-titre`} value={titre} onChange={(e) => { setTitre(e.target.value) }} required autoFocus />
 
-      <div className="champs-2">
-        <div>
-          <label htmlFor={`${id}-pages`}>Nombre de pages</label>
-          <input
-            id={`${id}-pages`}
-            type="number"
-            inputMode="numeric"
-            min={1}
-            value={pages}
-            onChange={(e) => { setPages(e.target.value) }}
-            required
-          />
-        </div>
-        <div>
-          <label htmlFor={`${id}-mots`}>Mots par page</label>
-          <input
-            id={`${id}-mots`}
-            type="number"
-            inputMode="numeric"
-            min={1}
-            value={mots}
-            onChange={(e) => { setMots(e.target.value) }}
-            required
-          />
-        </div>
-      </div>
+      <label htmlFor={`${id}-mots`}>Mots par page</label>
+      <input
+        id={`${id}-mots`}
+        type="number"
+        inputMode="numeric"
+        min={1}
+        value={mots}
+        onChange={(e) => { setMots(e.target.value) }}
+        required
+      />
 
       <label htmlFor={`${id}-parties`}>Parties, une par ligne</label>
       <textarea

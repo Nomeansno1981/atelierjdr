@@ -635,8 +635,9 @@ function BarreEtat({
   pagination: Pagination
   mots: ReadonlyMap<string, MotsSection>
 }) {
-  const { pagesTotal } = plan.livre
-  const depasse = pagination.totalPages > pagesTotal
+  const pages = pagination.totalPages
+  // Un livre imprimé compte un multiple de 4 pages : on dit combien en compterait l'impression.
+  const imprime = Math.ceil(pages / 4) * 4
   let ecrits = 0
   let cible = 0
   for (const m of mots.values()) {
@@ -648,8 +649,8 @@ function BarreEtat({
 
   return (
     <div className="barre-etat">
-      <p className={depasse ? 'etat-depasse' : undefined}>
-        <span className="etiquette">Pages</span> {pagination.totalPages} / {pagesTotal}
+      <p>
+        <span className="etiquette">Pages</span> {pages}
       </p>
       <p>
         <span className="etiquette">Mots</span> {formaterNombre(ecrits)} / {formaterNombre(cible)}
@@ -663,9 +664,12 @@ function BarreEtat({
           </span>
         ))}
       </p>
-      {pagesTotal % 4 !== 0 && (
-        <p className="alerte-pages" title="Un livre imprimé compte en général un multiple de 4 pages.">
-          {pagesTotal} pages : pas un multiple de 4
+      {imprime !== pages && (
+        <p
+          className="alerte-pages"
+          title={`Un livre imprimé compte un multiple de 4 pages : il en faudra ${imprime - pages} de plus (contenu ou pages blanches).`}
+        >
+          Impression : {imprime} pages
         </p>
       )}
     </div>

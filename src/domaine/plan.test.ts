@@ -184,3 +184,20 @@ describe('réglages du livre', () => {
     )
   })
 })
+
+describe('nombre de pages', () => {
+  it('plus de budget de pages : un plan sans pagesTotal est valide, et le reste à l’écriture', () => {
+    const texte = lireExemple()['plan.json'] ?? ''
+    const sans = texte.replace(/\n {4}"pagesTotal": \d+,/, '')
+    expect(sans).not.toContain('pagesTotal')
+    const plan = lirePlan(sans)
+    expect(plan.livre.pagesTotal).toBeUndefined()
+    expect(serialiserPlan(plan)).toBe(sans)
+  })
+
+  it('un ancien pagesTotal est gardé tel quel', () => {
+    const texte = lireExemple()['plan.json'] ?? ''
+    expect(lirePlan(texte).livre.pagesTotal).toBe(20)
+    expect(serialiserPlan(lirePlan(texte))).toBe(texte)
+  })
+})

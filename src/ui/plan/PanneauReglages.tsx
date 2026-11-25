@@ -26,7 +26,6 @@ interface Proprietes {
 
 export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDeconnecter, fermer }: Proprietes) {
   const [titre, setTitre] = useState(plan.livre.titre)
-  const [pagesTotal, setPagesTotal] = useState(String(plan.livre.pagesTotal))
   const [motsParPage, setMotsParPage] = useState(String(plan.livre.motsParPage))
   const [typographie, setTypographie] = useState<ReglesTypo>(reglesTypo(plan))
   const [modele, setModele] = useState(plan.reglages?.compilation?.modele ?? MODELE_PAR_DEFAUT)
@@ -37,7 +36,6 @@ export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDe
     e.preventDefault()
     valider({
       titre,
-      pagesTotal: Number.parseInt(pagesTotal, 10) || plan.livre.pagesTotal,
       motsParPage: Number.parseInt(motsParPage, 10) || plan.livre.motsParPage,
       typographie,
       // Le modèle n'est écrit dans plan.json que s'il diffère de celui par défaut.
@@ -62,32 +60,17 @@ export function PanneauReglages({ plan, enAttente, valider, normaliserTout, seDe
         <label htmlFor={`${id}-titre`}>Titre du livre</label>
         <input id={`${id}-titre`} value={titre} onChange={(e) => { setTitre(e.target.value) }} required />
 
-        <div className="champs-2">
-          <div>
-            <label htmlFor={`${id}-pages`}>Nombre de pages</label>
-            <input
-              id={`${id}-pages`}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={pagesTotal}
-              onChange={(e) => { setPagesTotal(e.target.value) }}
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor={`${id}-mpp`}>Mots par page</label>
-            <input
-              id={`${id}-mpp`}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={motsParPage}
-              onChange={(e) => { setMotsParPage(e.target.value) }}
-              required
-            />
-          </div>
-        </div>
+        <label htmlFor={`${id}-mpp`}>Mots par page</label>
+        <input
+          id={`${id}-mpp`}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          value={motsParPage}
+          onChange={(e) => { setMotsParPage(e.target.value) }}
+          required
+        />
+        <p className="aide">Le nombre de pages du livre est celui qu’occupent ses sections : il suit le plan.</p>
 
         <p className="aide">
           Les parties se créent, se renomment et se déplacent directement dans la grille : touchez ou glissez leur

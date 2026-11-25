@@ -6,18 +6,12 @@
 import { coteDeLaPage, type Pagination } from './pagination'
 import type { Cote, Livre } from './plan'
 
-export type ContenuPage =
-  | { type: 'section'; id: string }
-  | { type: 'blanche' }
-  /** Page prévue au budget mais pas encore attribuée. */
-  | { type: 'libre' }
+export type ContenuPage = { type: 'section'; id: string } | { type: 'blanche' }
 
 export interface PageGrille {
   numero: number
   cote: Cote
   contenu: ContenuPage
-  /** Au-delà de `pagesTotal`. */
-  depasse: boolean
   /** Identifiant de la partie qui commence sur cette page, le cas échéant. */
   debutPartie: string | null
 }
@@ -43,9 +37,10 @@ export interface Planche {
 export function construireGrille(
   sections: readonly { id: string; partie: string }[],
   pagination: Pagination,
-  livre: Pick<Livre, 'pagesTotal' | 'premierePage'>,
+  livre: Pick<Livre, 'premierePage'>,
 ): Planche[] {
-  const nbPages = Math.max(pagination.totalPages, livre.pagesTotal)
+  // Le livre a exactement les pages que ses sections occupent.
+  const nbPages = pagination.totalPages
   const contenus = new Map<number, ContenuPage>()
   const debutsPartie = new Map<number, string>()
   let partiePrecedente: string | null = null
@@ -73,8 +68,7 @@ export function construireGrille(
     const page: PageGrille = {
       numero: n,
       cote: coteDeLaPage(n, livre.premierePage),
-      contenu: contenus.get(n) ?? { type: 'libre' },
-      depasse: n > livre.pagesTotal,
+      contenu: contenus.get(n) ?? { type: 'blanche' },
       debutPartie: debutsPartie.get(n) ?? null,
     }
     planche[page.cote] = page
