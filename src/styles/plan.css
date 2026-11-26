@@ -164,8 +164,9 @@
   gap: 4px;
 }
 
+/* Simple information (pages à l'impression), pas une erreur. */
 .alerte-pages {
-  color: var(--erreur);
+  color: var(--texte-doux);
 }
 
 /* --- Bandeaux ------------------------------------------------------------- */
@@ -215,8 +216,9 @@
 /* --- Grille ----------------------------------------------------------------- */
 
 .contenu-plan {
+  /* À gauche, de quoi loger le « + » qui précède la première double page d'une ligne. */
   padding: 20px max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom))
-    max(20px, env(safe-area-inset-left));
+    max(34px, env(safe-area-inset-left));
 }
 
 .planches {
@@ -511,17 +513,27 @@
   color: inherit;
 }
 
-.postit-inserer {
-  position: absolute;
+/*
+ * « + » entre deux post-its, posé dans la grille : au pli d'une double page,
+ * ou au milieu de l'espace qui sépare deux doubles pages (dans la marge de
+ * gauche en début de ligne : un débordement à gauche ne fait pas défiler).
+ */
+.planches {
+  --taille-inserer: 22px;
+  --ecart-planches: 28px;
+}
+
+.inserer {
+  position: relative;
   z-index: 2;
-  top: 50%;
-  left: -4px;
-  transform: translate(-50%, -50%);
+  grid-row: 2;
+  align-self: center;
+  justify-self: start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: var(--taille-inserer);
+  height: var(--taille-inserer);
   min-height: 0;
   padding: 0;
   border-radius: 50%;
@@ -530,16 +542,19 @@
   opacity: 0.6;
 }
 
-/* Au bord droit : nouvelle section après ce post-it. */
-.postit-inserer-apres {
-  left: auto;
-  right: -4px;
-  transform: translate(50%, -50%);
+.inserer:hover,
+.inserer:focus-visible {
+  opacity: 1;
 }
 
-.postit:hover .postit-inserer,
-.postit-inserer:focus-visible {
-  opacity: 1;
+/* Début de double page : au milieu de l'écart avec la précédente. */
+.inserer-bord {
+  margin-left: calc(var(--ecart-planches) / -2 - var(--taille-inserer) / 2);
+}
+
+/* Entre les deux pages d'une double page : sur le pli. */
+.inserer-pli {
+  margin-left: calc(-1px - var(--taille-inserer) / 2);
 }
 
 .mention-suite {
@@ -698,7 +713,7 @@
   white-space: nowrap;
 }
 
-.en-glissement .postit-inserer,
+.en-glissement .inserer,
 .en-glissement .postit-pages,
 .en-glissement .postit-menu {
   visibility: hidden;
@@ -738,7 +753,7 @@
     --planche: 440px;
   }
 
-  .mode-plan[data-zoom='compact'] :is(.postit-partie, .postit-resume, .jauge-chiffres, .postit-pages, .postit-inserer) {
+  .mode-plan[data-zoom='compact'] :is(.postit-partie, .postit-resume, .jauge-chiffres, .postit-pages, .inserer) {
     display: none;
   }
 
@@ -785,14 +800,16 @@
     padding-right: 38px;
   }
 
-  .postit-inserer {
-    width: 28px;
-    height: 28px;
+  .planches {
+    --taille-inserer: 28px;
+  }
+
+  .inserer {
     opacity: 0.8;
   }
 
   /* Zone tactile élargie autour du petit bouton. */
-  .postit-inserer::before {
+  .inserer::before {
     content: '';
     position: absolute;
     inset: -8px;

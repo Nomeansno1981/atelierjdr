@@ -264,16 +264,7 @@ export function Grille(props: ProprietesGrille) {
     },
     modifier,
     changerPages,
-    creerAvant: (id) => {
-      const index = plan.sections.findIndex((s) => s.id === id)
-      creer(index, plan.sections[index]?.partie ?? '')
-    },
-    creerApres: (id) => {
-      const index = plan.sections.findIndex((s) => s.id === id)
-      const partie = plan.sections[index]?.partie ?? ''
-      const suivante = plan.sections[index + 1]?.partie
-      creer(index + 1, partie, suivante !== undefined && suivante !== partie ? suivante : undefined)
-    },
+
     touche,
   }
   const actionsBandeau: ActionsBandeau = {
@@ -283,7 +274,16 @@ export function Grille(props: ProprietesGrille) {
     creerDans: props.creerDansPartie,
   }
   const contexte: ContexteGrille = {
-    premiere: ordre[0]?.id,
+    precedentes: new Map(ordre.map((s, i) => [s.id, ordre[i - 1]])),
+    /** Nouvelle section juste avant celle-ci : entre deux parties, on choisira. */
+    insererAvant: (id: string) => {
+      const index = plan.sections.findIndex((s) => s.id === id)
+      const apres = plan.sections[index]
+      const avant = plan.sections[index - 1]
+      if (!apres) return
+      if (!avant) creer(index, apres.partie)
+      else creer(index, avant.partie, avant.partie !== apres.partie ? apres.partie : undefined)
+    },
     pagination,
     sections,
     etiquettes,
@@ -368,8 +368,9 @@ export function Grille(props: ProprietesGrille) {
 }
 
 interface ContexteGrille {
-  /** Première section de la grille : la seule à avoir un « + » à sa gauche. */
-  premiere: string | undefined
+  /** Section qui précède chacune dans la grille. */
+  precedentes: ReadonlyMap<string, Section | undefined>
+  insererAvant: (id: string) => void
   pagination: Pagination
   sections: ReadonlyMap<string, Section>
   etiquettes: ReadonlyMap<string, string>
@@ -384,16 +385,7 @@ interface ContexteGrille {
 }
 
 function VuePlanche({ planche, contexte }: { planche: Planche; contexte: ContexteGrille }) {
-  const { pagination, sections, etiquettes, mots, glisse, actions, vides, parties, premiere } = contexte
-
-  /**
-   * Un seul « + » entre deux post-its : au bord droit de chacun (après lui),
-   * plus un au bord gauche du tout premier de la grille.
-   */
-  const boutonsInserer = (section: Section, debut: boolean, fin: boolean) => ({
-    avant: debut && section.id === premiere,
-    apres: fin,
-  })
+  const { pagination, sections, etiquettes, mots, glisse, actions, vides, parties, precedentes, insererAvant } = contexte
   const pages = [planche.gauche, planche.droite].filter((p): p is PageGrille => p !== null)
   const auPointeur = glisse?.mode === 'pointeur'
   const repere = auPointeur ? glisse.repere : null
@@ -463,11 +455,40 @@ function VuePlanche({ planche, contexte }: { planche: Planche; contexte: Context
             place={glisse?.mode === 'clavier' && glisse.id === section.id}
             source={source}
             insertion={insertion}
-            inserer={boutonsInserer(section, !segment.suite, !segment.continue)}
             actions={actions}
           />
         )
       })}
+      {/*
+        Un « + » par intervalle entre deux sections, posé dans la grille et non
+        sur un post-it : au pli de la double page, ou dans l'espace qui la
+        sépare de la précédente (dans la marge, en début de ligne). Le premier
+        post-it du livre a le sien devant lui ; après le dernier, c'est
+        « Nouvelle section ».
+      */}
+      {planche.segments
+        .filter((segment) => !segment.suite)
+        .map((segment) => {
+          const section = sections.get(segment.id)
+          if (!section) return null
+          const avant = precedentes.get(section.id)
+          const colonne = COLONNE[planche.gauche?.numero === segment.premiere ? 'gauche' : 'droite']
+          return (
+            <button
+              key={`inserer-${segment.id}`}
+              type="button"
+              className={`inserer ${colonne === 1 ? 'inserer-bord' : 'inserer-pli'}`}
+              style={{ gridColumn: colonne }}
+              aria-label={avant ? `Nouvelle section entre ${avant.titre} et ${section.titre}` : `Nouvelle section avant ${section.titre}`}
+              title="Nouvelle section ici"
+              onClick={() => {
+                insererAvant(section.id)
+              }}
+            >
+              <IconePlus />
+            </button>
+          )
+        })}
     </div>
   )
 }

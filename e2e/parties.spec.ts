@@ -100,7 +100,7 @@ test('pendant le glissement d’une partie, rien ne bouge et la silhouette annon
 
 test('« Nouvelle partie ici » coupe la partie : la suite passe dans la nouvelle', async ({ page }) => {
   const { faux } = await ouvrir(page)
-  await page.getByRole('button', { name: 'Nouvelle section après Illustration : la chute' }).click()
+  await page.getByRole('button', { name: 'Nouvelle section entre Illustration : la chute et Les serments' }).click()
   const dialogue = page.getByRole('dialog', { name: 'Nouvelle section' })
   await dialogue.getByRole('radio', { name: /^Partie/ }).check()
   await page.getByRole('dialog', { name: 'Nouvelle partie' }).getByLabel('Titre de la partie').fill('Le combat')
@@ -214,7 +214,7 @@ test('les réglages ne listent plus les parties', async ({ page }) => {
 
 test('le « + » entre deux parties : on choisit la fin de l’une ou le début de l’autre', async ({ page }) => {
   await ouvrir(page)
-  await page.getByRole('button', { name: 'Nouvelle section après Qu’est-ce que Katastrophê ?' }).click()
+  await page.getByRole('button', { name: 'Nouvelle section entre Qu’est-ce que Katastrophê ? et Créer son personnage' }).click()
   const dialogue = page.getByRole('dialog', { name: 'Nouvelle section' })
   const partie = dialogue.getByLabel('Partie', { exact: true })
   await expect(partie.locator('option')).toHaveText(['À la fin de « Présentation »', 'Au début de « Les règles »'])
@@ -225,6 +225,6 @@ test('le « + » entre deux parties : on choisit la fin de l’une ou le début 
   await expect(postit(page, 'Les dés').locator('.postit-partie')).toHaveText('II. Les règles')
 
   // Au milieu d'une partie, pas de choix.
-  await page.getByRole('button', { name: 'Nouvelle section après Avant-propos' }).click()
+  await page.getByRole('button', { name: 'Nouvelle section entre Avant-propos et Qu’est-ce que Katastrophê ?' }).click()
   await expect(page.getByRole('dialog', { name: 'Nouvelle section' })).toContainText('Dans la partie « Présentation ».')
 })

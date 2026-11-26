@@ -12,8 +12,6 @@ export interface ActionsPostIt {
   ouvrir: (id: string) => void
   modifier: (id: string) => void
   changerPages: (id: string, delta: number) => void
-  creerAvant: (id: string) => void
-  creerApres: (id: string) => void
   touche: (e: KeyboardEvent, id: string) => void
 }
 
@@ -31,8 +29,6 @@ interface Proprietes {
   source?: boolean
   /** Ligne d'insertion du post-it glissé, à ce bord-ci. */
   insertion?: 'avant' | 'apres' | undefined
-  /** « + » au bord gauche (nouvelle section avant) et au bord droit (après). */
-  inserer?: { avant: boolean; apres: boolean }
   actions: ActionsPostIt
 }
 
@@ -48,7 +44,6 @@ export function PostIt({
   place,
   source = false,
   insertion,
-  inserer = { avant: false, apres: false },
   actions,
 }: Proprietes) {
   // Seul le premier segment se saisit : il porte l'identifiant de la section.
@@ -166,34 +161,6 @@ export function PostIt({
             </button>
           </div>
         </>
-      )}
-      {inserer.avant && (
-        <button
-          type="button"
-          className="postit-inserer"
-          aria-label={`Nouvelle section avant ${section.titre}`}
-          title="Nouvelle section ici"
-          {...sansGlisser}
-          onClick={() => {
-            actions.creerAvant(section.id)
-          }}
-        >
-          <IconePlus />
-        </button>
-      )}
-      {inserer.apres && (
-        <button
-          type="button"
-          className="postit-inserer postit-inserer-apres"
-          aria-label={`Nouvelle section après ${section.titre}`}
-          title="Nouvelle section ici"
-          {...sansGlisser}
-          onClick={() => {
-            actions.creerApres(section.id)
-          }}
-        >
-          <IconePlus />
-        </button>
       )}
     </div>
   )

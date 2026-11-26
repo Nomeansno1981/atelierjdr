@@ -224,13 +224,25 @@ test('créer une section : fichier vide créé sur GitHub', async ({ page }) => 
   expect(erreurs).toEqual([])
 })
 
-test('un seul « + » entre deux post-its, plus un devant le premier', async ({ page }) => {
+test('un seul « + » entre deux post-its, posé entre eux et non sur l’un d’eux', async ({ page }) => {
   await ouvrir(page)
   await expect(page.getByRole('button', { name: /^Nouvelle section avant/ })).toHaveCount(1)
   await expect(page.getByRole('button', { name: 'Nouvelle section avant Page de titre' })).toHaveCount(1)
-  await expect(page.getByRole('button', { name: /^Nouvelle section après/ })).toHaveCount(10)
+  // Dix sections : neuf intervalles.
+  await expect(page.getByRole('button', { name: /^Nouvelle section entre/ })).toHaveCount(9)
+  // Entre deux doubles pages, le « + » est dans l'espace qui les sépare, hors des deux post-its.
+  const plus = await page.getByRole('button', { name: 'Nouvelle section entre Page de titre et Avant-propos' }).boundingBox()
+  const gauche = await postit(page, 'Page de titre').boundingBox()
+  const droite = await postit(page, 'Avant-propos').boundingBox()
+  if (!plus || !gauche || !droite) throw new Error('invisible')
+  if (Math.abs(gauche.y - droite.y) < 5) {
+    expect(plus.x).toBeGreaterThanOrEqual(gauche.x + gauche.width)
+    expect(plus.x + plus.width).toBeLessThanOrEqual(droite.x)
+  }
+  // Rien ne déborde à droite de l'écran.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
 
-  await page.getByRole('button', { name: 'Nouvelle section après Créer son personnage' }).click()
+  await page.getByRole('button', { name: 'Nouvelle section entre Créer son personnage et Le heurt' }).click()
   const dialogue = page.getByRole('dialog', { name: 'Nouvelle section' })
   await dialogue.getByLabel('Hors-texte').check()
   await dialogue.getByLabel('Titre', { exact: true }).fill('Fiche de personnage')

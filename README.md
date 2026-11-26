@@ -86,7 +86,7 @@ Le plan est un chemin de fer : chaque section est un post-it qui couvre autant d
 | Déplacer une section | Glisser le post-it | Appui long (un tiers de seconde), puis glisser | Espace, flèches, puis Espace ou Entrée (Échap annule) |
 | Modifier | Bouton « … » | Bouton « … » | Tab jusqu’au bouton, Entrée |
 | Changer le nombre de pages d’une section | Boutons − et + | Boutons − et + | |
-| Créer une section, un hors-texte, une page blanche ou une partie | « + » entre deux post-its (un seul par intervalle, au bord droit du post-it de gauche ; un autre devant le premier) ou « Nouvelle section » en fin de grille | idem | |
+| Créer une section, un hors-texte, une page blanche ou une partie | « + » entre deux post-its (un par intervalle, posé dans la grille : au pli d’une double page ou entre deux doubles pages ; un autre devant le premier) ou « Nouvelle section » en fin de grille | idem | |
 | Déplacer une partie entière | Glisser son bandeau | Appui long sur son bandeau, puis glisser | Bandeau, Entrée, puis « Placer avant / après » |
 | Annuler, rétablir | Boutons en haut à gauche | idem | Cmd/Ctrl+Z, Cmd/Ctrl+Maj+Z |
 
